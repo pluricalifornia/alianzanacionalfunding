@@ -1,0 +1,470 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Organization Map with Funding Hierarchy</title>
+    
+    <!-- ArcGIS Maps SDK for JavaScript -->
+    <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css">
+    <script src="https://js.arcgis.com/4.28/"></script>
+    
+    <!-- D3.js -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
+    
+    <style>
+        html, body, #viewDiv {
+            padding: 0;
+            margin: 0;
+            height: 100%;
+            width: 100%;
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+        }
+        
+        #mindMapContainer {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            width: 400px;
+            height: 500px;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
+            padding: 15px;
+            z-index: 100;
+            display: none;
+            overflow: hidden;
+        }
+        
+        #mindMapTitle {
+            font-size: 16px;
+            font-weight: bold;
+            margin-bottom: 10px;
+            color: #333;
+            text-align: center;
+            border-bottom: 2px solid #007AC2;
+            padding-bottom: 8px;
+        }
+        
+        #mindMapSvg {
+            width: 100%;
+            height: calc(100% - 40px);
+        }
+        
+        .node {
+            cursor: pointer;
+            stroke-width: 2px;
+        }
+        
+        .node.collapsed {
+            stroke: #555;
+        }
+        
+        .node.expanded {
+            stroke: #007AC2;
+        }
+        
+        .link {
+            fill: none;
+            stroke: #999;
+            stroke-width: 2px;
+        }
+        
+        .node-text {
+            font-size: 11px;
+            font-weight: 500;
+            text-anchor: middle;
+            dominant-baseline: central;
+            fill: #333;
+            pointer-events: none;
+        }
+        
+        .funding-text {
+            font-size: 9px;
+            text-anchor: start;
+            fill: #666;
+            pointer-events: none;
+        }
+        
+        .close-btn {
+            position: absolute;
+            top: 10px;
+            right: 10px;
+            cursor: pointer;
+            font-size: 20px;
+            color: #999;
+            background: none;
+            border: none;
+            padding: 0;
+        }
+        
+        .close-btn:hover {
+            color: #333;
+        }
+        
+        .legend {
+            position: absolute;
+            bottom: 20px;
+            left: 20px;
+            background: rgba(255, 255, 255, 0.9);
+            padding: 10px;
+            border-radius: 5px;
+            font-size: 12px;
+            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+        }
+        
+        .legend-item {
+            display: flex;
+            align-items: center;
+            margin-bottom: 5px;
+        }
+        
+        .legend-color {
+            width: 15px;
+            height: 15px;
+            border-radius: 50%;
+            margin-right: 8px;
+            border: 2px solid #333;
+        }
+    </style>
+</head>
+<body>
+    <div id="viewDiv"></div>
+    
+    <div id="mindMapContainer">
+        <button class="close-btn" onclick="closeMindMap()">&times;</button>
+        <div id="mindMapTitle">Funding Sources</div>
+        <svg id="mindMapSvg"></svg>
+    </div>
+    
+    <div class="legend">
+        <div class="legend-item">
+            <div class="legend-color" style="background: #FF6B6B;"></div>
+            <span>Border Region Organizations</span>
+        </div>
+        <div class="legend-item">
+            <div class="legend-color" style="background: #4ECDC4;"></div>
+            <span>Non-Border Organizations</span>
+        </div>
+        <div style="margin-top: 8px; font-weight: bold;">Click on markers to view funding hierarchy</div>
+    </div>
+
+    <script>
+        let map, view;
+        let organizationData = [];
+        let currentMindMapData = null;
+
+        // Initialize the map
+        require([
+            "esri/Map",
+            "esri/views/MapView",
+            "esri/Graphic",
+            "esri/layers/GraphicsLayer",
+            "esri/geometry/Point",
+            "esri/symbols/SimpleMarkerSymbol",
+            "esri/PopupTemplate"
+        ], function(Map, MapView, Graphic, GraphicsLayer, Point, SimpleMarkerSymbol, PopupTemplate) {
+            
+            // Create map
+            map = new Map({
+                basemap: "gray-vector"
+            });
+
+            // Create view
+            view = new MapView({
+                container: "viewDiv",
+                map: map,
+                zoom: 4,
+                center: [-98, 39] // Center on US
+            });
+
+            // Create graphics layer for organizations
+            const graphicsLayer = new GraphicsLayer();
+            map.add(graphicsLayer);
+
+            // Load and process data
+            loadOrganizationData().then(data => {
+                organizationData = data;
+                addOrganizationsToMap(data, graphicsLayer);
+            });
+        });
+
+        async function loadOrganizationData() {
+            // Read the Excel file using the file system API
+            const fileContent = await window.fs.readFile('Map Data.xlsx');
+            
+            // Parse Excel file
+            const workbook = XLSX.read(fileContent, { cellStyles: true });
+            const worksheet = workbook.Sheets[workbook.SheetNames[0]];
+            const data = XLSX.utils.sheet_to_json(worksheet);
+            
+            // Process and geocode the data
+            const processedData = [];
+            
+            for (let org of data) {
+                // Simple geocoding based on city/state (you'd use a real geocoding service in production)
+                const coordinates = await getCoordinates(org.City, org.State);
+                
+                const processedOrg = {
+                    name: org['Member Organization'],
+                    city: org.City,
+                    state: org.State,
+                    county: org.County,
+                    region: org['State Region'],
+                    borderDesignation: org['Border Designation'],
+                    censusDivision: org['Census Division'],
+                    programSites: org['# of Program Sites'],
+                    coordinates: coordinates,
+                    funding: {
+                        local: parseFundingSources(org['Local Funding Sources']),
+                        regional: parseFundingSources(org['Regional Funding Sources']),
+                        statewide: parseFundingSources(org['Statewide Funding Sources']),
+                        national: parseFundingSources(org['National Funding Sources'])
+                    }
+                };
+                
+                processedData.push(processedOrg);
+            }
+            
+            return processedData;
+        }
+
+        function parseFundingSources(fundingString) {
+            if (!fundingString || fundingString.trim() === '') return [];
+            return fundingString.split(',').map(source => source.trim()).filter(source => source.length > 0);
+        }
+
+        async function getCoordinates(city, state) {
+            // Simplified coordinate mapping - in production, use a real geocoding API
+            const coordinates = {
+                'Oxnard, CA': [-119.1771, 34.1975],
+                'Yuma, AZ': [-114.6274, 32.6927],
+                'El Paso, TX': [-106.4850, 31.7619],
+                'Apopka, FL': [-81.5323, 28.6934],
+                'Pahokee, FL': [-80.6656, 26.8211],
+                'Immokalee, FL': [-81.4173, 26.4187],
+                'Yakima, WA': [-120.5059, 46.6021],
+                'Salinas, CA': [-121.6555, 36.6777],
+                'Fresno, CA': [-119.7871, 36.7378],
+                'Stockton, CA': [-121.2908, 37.9577],
+                'Phoenix, AZ': [-112.0740, 33.4484],
+                'Las Cruces, NM': [-106.7637, 32.3199],
+                'San Antonio, TX': [-98.4936, 29.4241],
+                'Laredo, TX': [-99.5075, 27.5306],
+                'McAllen, TX': [-98.2300, 26.2034],
+                'Weslaco, TX': [-97.9908, 26.1595],
+                'Homestead, FL': [-80.4773, 25.4687],
+                'Mount Vernon, WA': [-122.3346, 48.4212]
+            };
+            
+            const key = `${city}, ${state}`;
+            return coordinates[key] || [-98, 39]; // Default to center US if not found
+        }
+
+        function addOrganizationsToMap(data, graphicsLayer) {
+            require([
+                "esri/Graphic",
+                "esri/geometry/Point",
+                "esri/symbols/SimpleMarkerSymbol",
+                "esri/PopupTemplate"
+            ], function(Graphic, Point, SimpleMarkerSymbol, PopupTemplate) {
+                
+                data.forEach(org => {
+                    const point = new Point({
+                        longitude: org.coordinates[0],
+                        latitude: org.coordinates[1]
+                    });
+
+                    // Different colors for border vs non-border regions
+                    const isBorder = org.borderDesignation && org.borderDesignation !== 'N/A';
+                    const color = isBorder ? [255, 107, 107] : [78, 205, 196]; // Red for border, teal for non-border
+
+                    const markerSymbol = new SimpleMarkerSymbol({
+                        color: color,
+                        outline: {
+                            color: [40, 40, 40],
+                            width: 2
+                        },
+                        size: 12
+                    });
+
+                    const popupTemplate = new PopupTemplate({
+                        title: org.name,
+                        content: `
+                            <div style="font-size: 14px;">
+                                <p><strong>Location:</strong> ${org.city}, ${org.state}</p>
+                                <p><strong>County:</strong> ${org.county}</p>
+                                <p><strong>Region:</strong> ${org.region}</p>
+                                <p><strong>Border Designation:</strong> ${org.borderDesignation || 'N/A'}</p>
+                                <p><strong>Program Sites:</strong> ${org.programSites}</p>
+                                <div style="margin-top: 15px; text-align: center;">
+                                    <button onclick="showMindMap('${org.name}')" 
+                                            style="background: #007AC2; color: white; border: none; 
+                                                   padding: 8px 16px; border-radius: 4px; cursor: pointer;">
+                                        View Funding Hierarchy
+                                    </button>
+                                </div>
+                            </div>
+                        `
+                    });
+
+                    const graphic = new Graphic({
+                        geometry: point,
+                        symbol: markerSymbol,
+                        popupTemplate: popupTemplate,
+                        attributes: {
+                            name: org.name,
+                            ...org
+                        }
+                    });
+
+                    graphicsLayer.add(graphic);
+                });
+            });
+        }
+
+        function showMindMap(orgName) {
+            const org = organizationData.find(o => o.name === orgName);
+            if (!org) return;
+
+            currentMindMapData = createMindMapData(org);
+            document.getElementById('mindMapTitle').textContent = `${orgName} - Funding Sources`;
+            document.getElementById('mindMapContainer').style.display = 'block';
+            
+            renderMindMap(currentMindMapData);
+        }
+
+        function createMindMapData(org) {
+            const data = {
+                name: org.name,
+                children: [
+                    {
+                        name: 'Local',
+                        color: '#FF6B6B',
+                        children: org.funding.local.map(source => ({ name: source, isLeaf: true })),
+                        expanded: false
+                    },
+                    {
+                        name: 'Regional',
+                        color: '#4ECDC4',
+                        children: org.funding.regional.map(source => ({ name: source, isLeaf: true })),
+                        expanded: false
+                    },
+                    {
+                        name: 'Statewide',
+                        color: '#45B7D1',
+                        children: org.funding.statewide.map(source => ({ name: source, isLeaf: true })),
+                        expanded: false
+                    },
+                    {
+                        name: 'National',
+                        color: '#F7DC6F',
+                        children: org.funding.national.map(source => ({ name: source, isLeaf: true })),
+                        expanded: false
+                    }
+                ]
+            };
+            return data;
+        }
+
+        function renderMindMap(data) {
+            const svg = d3.select('#mindMapSvg');
+            svg.selectAll('*').remove();
+
+            const width = 370;
+            const height = 450;
+            
+            const g = svg.append('g');
+
+            // Create hierarchical layout
+            const root = d3.hierarchy(data);
+            const treeLayout = d3.tree().size([width - 100, height - 100]);
+            treeLayout(root);
+
+            // Draw links
+            const links = g.selectAll('.link')
+                .data(root.links())
+                .enter()
+                .append('path')
+                .attr('class', 'link')
+                .attr('d', d3.linkVertical()
+                    .x(d => d.x + 50)
+                    .y(d => d.y + 50)
+                );
+
+            // Draw nodes
+            const nodes = g.selectAll('.node')
+                .data(root.descendants())
+                .enter()
+                .append('g')
+                .attr('class', 'node')
+                .attr('transform', d => `translate(${d.x + 50}, ${d.y + 50})`)
+                .on('click', handleNodeClick);
+
+            // Add circles for nodes
+            nodes.append('circle')
+                .attr('r', d => d.depth === 0 ? 8 : 6)
+                .style('fill', d => {
+                    if (d.depth === 0) return '#333';
+                    if (d.depth === 1) return d.data.color;
+                    return '#f0f0f0';
+                })
+                .style('stroke', '#333')
+                .style('stroke-width', 2);
+
+            // Add text labels
+            nodes.append('text')
+                .attr('class', 'node-text')
+                .attr('dy', d => d.depth === 0 ? -15 : (d.depth === 1 ? -15 : 3))
+                .text(d => {
+                    if (d.data.name.length > 20) {
+                        return d.data.name.substring(0, 17) + '...';
+                    }
+                    return d.data.name;
+                })
+                .style('font-size', d => d.depth === 0 ? '12px' : (d.depth === 1 ? '11px' : '9px'))
+                .style('font-weight', d => d.depth <= 1 ? 'bold' : 'normal');
+
+            // Add funding count for category nodes
+            nodes.filter(d => d.depth === 1)
+                .append('text')
+                .attr('class', 'funding-text')
+                .attr('dy', 25)
+                .text(d => `(${d.children ? d.children.length : 0} sources)`)
+                .style('font-size', '9px')
+                .style('text-anchor', 'middle');
+
+            // Initially hide all leaf nodes
+            nodes.filter(d => d.depth === 2).style('display', 'none');
+            links.filter(d => d.target.depth === 2).style('display', 'none');
+
+            function handleNodeClick(event, d) {
+                if (d.depth === 1 && d.children) {
+                    const isExpanded = d.data.expanded;
+                    d.data.expanded = !isExpanded;
+                    
+                    // Toggle visibility of child nodes
+                    const childNodes = nodes.filter(node => node.parent === d);
+                    const childLinks = links.filter(link => link.source === d);
+                    
+                    if (d.data.expanded) {
+                        childNodes.style('display', 'block');
+                        childLinks.style('display', 'block');
+                    } else {
+                        childNodes.style('display', 'none');
+                        childLinks.style('display', 'none');
+                    }
+                }
+            }
+        }
+
+        function closeMindMap() {
+            document.getElementById('mindMapContainer').style.display = 'none';
+        }
+
+        // Make functions globally available
+        window.showMindMap = showMindMap;
+        window.closeMindMap = closeMindMap;
+    </script>
+</body>
+</html>
