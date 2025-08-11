@@ -556,7 +556,7 @@
                             <p><strong>Border Designation:</strong> ${org.borderDesignation || 'N/A'}</p>
                             <p><strong>Program Sites:</strong> ${org.programSites}</p>
                             <div style="margin-top: 15px; text-align: center;">
-                                <button onclick="showMindMap('${escapedName}')" 
+                                <button onclick="window.showMindMap('${escapedName}')" 
                                         style="background: #007AC2; color: white; border: none; 
                                                padding: 8px 16px; border-radius: 4px; cursor: pointer;
                                                font-size: 12px; font-weight: bold;">
@@ -595,6 +595,14 @@
             
             renderMindMap(mindMapData);
         }
+
+        function closeMindMap() {
+            document.getElementById('mindMapContainer').style.display = 'none';
+        }
+
+        // Make functions globally available immediately
+        window.showMindMap = showMindMap;
+        window.closeMindMap = closeMindMap;
 
         function createMindMapData(org) {
             const data = {
@@ -755,14 +763,6 @@
                 }
             }
         }
-
-        function closeMindMap() {
-            document.getElementById('mindMapContainer').style.display = 'none';
-        }
-
-        // Make functions globally available
-        window.showMindMap = showMindMap;
-        window.closeMindMap = closeMindMap;
 
         // Initialize the map when the page loads
         initializeMap();
