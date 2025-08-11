@@ -605,9 +605,9 @@
               ]
         };
         
-        // Function to get coordinates for cities
-        function getCoordinates(city, state) {
-            const coordinates = {
+        // Function to get coordinates for cities with anti-overlap positioning
+        function getCoordinates(city, state, organizationIndex = 0, totalInCity = 1) {
+            const baseCoordinates = {
                 'Oxnard, CA': [-119.1771, 34.1975],
                 'Yuma, AZ': [-114.6276, 32.6927],
                 'El Paso, TX': [-106.4850, 31.7619],
@@ -627,7 +627,52 @@
             };
             
             const key = `${city}, ${state}`;
-            return coordinates[key] || [-98, 39];
+            const baseCoords = baseCoordinates[key] || [-98, 39];
+            
+            // If only one organization in this city, return base coordinates
+            if (totalInCity === 1) {
+                return baseCoords;
+            }
+            
+            // Calculate offset for multiple organizations in same city
+            // Use a circular pattern around the base coordinates
+            const radius = 0.08; // Degrees of separation (roughly 5-6 miles)
+            const angle = (organizationIndex / totalInCity) * 2 * Math.PI;
+            
+            // Apply offset
+            const offsetCoords = [
+                baseCoords[0] + (radius * Math.cos(angle)),
+                baseCoords[1] + (radius * Math.sin(angle))
+            ];
+            
+            return offsetCoords;
+        }
+        
+        // Function to count organizations per city
+        function countOrganizationsPerCity(organizations) {
+            const cityCount = {};
+            organizations.forEach(org => {
+                const key = `${org.city}, ${org.state}`;
+                cityCount[key] = (cityCount[key] || 0) + 1;
+            });
+            return cityCount;
+        }
+        
+        // Function to get organization index within city
+        function getOrganizationIndexInCity(organizations, currentOrgIndex) {
+            const currentOrg = organizations[currentOrgIndex];
+            const currentCityKey = `${currentOrg.city}, ${currentOrg.state}`;
+            
+            let indexInCity = 0;
+            for (let i = 0; i < currentOrgIndex; i++) {
+                const org = organizations[i];
+                const cityKey = `${org.city}, ${org.state}`;
+                if (cityKey === currentCityKey) {
+                    indexInCity++;
+                }
+            }
+            
+            return indexInCity;
         }
         
         // Function to parse funding sources from string
