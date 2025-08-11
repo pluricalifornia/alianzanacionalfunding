@@ -213,15 +213,7 @@
             return sourcesString.split(',').map(source => source.trim()).filter(source => source !== '');
         }
 
-        // Initialize the map
-        async function initializeMap() {
-            try {
-                // Create map
-                map = new Map({
-                    basemap: "gray-vector"
-                });
-
-            // Add click event handler to automatically open funding hierarchy
+        function setupClickHandler() {
             view.on("click", function(event) {
                 view.hitTest(event).then(function(response) {
                     if (response.results.length > 0) {
@@ -239,22 +231,13 @@
             });
         }
 
-        function setupClickHandler() {
-            view.on("click", function(event) {
-                view.hitTest(event).then(function(response) {
-                    if (response.results.length > 0) {
-                        const clickedGraphic = response.results.find(result => 
-                            result.graphic.attributes && result.graphic.attributes.name
-                        );
-                        
-                        if (clickedGraphic && clickedGraphic.graphic.attributes.name) {
-                            setTimeout(() => {
-                                showMindMap(clickedGraphic.graphic.attributes.name);
-                            }, 100);
-                        }
-                    }
+        // Initialize the map
+        async function initializeMap() {
+            try {
+                // Create map
+                map = new Map({
+                    basemap: "gray-vector"
                 });
-            });
 
                 // Create view
                 view = new MapView({
@@ -594,8 +577,6 @@
                     },
                     size: 14
                 });
-
-                const escapedName = org.name.replace(/'/g, "\\'").replace(/"/g, '\\"');
 
                 const popupTemplate = new PopupTemplate({
                     title: org.name,
