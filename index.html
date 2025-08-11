@@ -206,7 +206,7 @@
         async function loadOrganizationData() {
             try {
                 // Load data from your GitHub repository
-                const response = await fetch('https://raw.githubusercontent.com/pluricalifornia/alianzanacionalfunding/main/organizations.json');
+                const response = await fetch('https://raw.githubusercontent.com/pluricalifornia/alianzanacionalfunding/main/data/organizations.json');
                 const jsonData = await response.json();
                 
                 // Process the data from your JSON format
