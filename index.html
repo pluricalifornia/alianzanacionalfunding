@@ -3,13 +3,10 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organization Map with Funding Hierarchy</title>
+    <title>Organization Funding Network with Hierarchy</title>
     
     <!-- ArcGIS Maps SDK for JavaScript -->
     <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css">
-    
-    <!-- D3.js -->
-    <script src="https://cdnjs.cloudflare.com/ajax/libs/d3/7.8.5/d3.min.js"></script>
     
     <style>
         html, body, #viewDiv {
@@ -20,166 +17,594 @@
             font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
         }
         
-        #mindMapContainer {
+        #controlPanel {
             position: absolute;
-            top: 20px;
-            right: 20px;
-            width: 400px;
-            height: 500px;
-            background: rgba(255, 255, 255, 0.98);
-            border-radius: 8px;
-            box-shadow: 0 8px 32px rgba(0,0,0,0.3);
+            top: 15px;
+            left: 15px;
+            background: white;
             padding: 15px;
-            z-index: 1000;
-            display: none;
-            overflow: hidden;
-            border: 2px solid #007AC2;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            z-index: 99;
+            display: flex;
+            flex-direction: column;
+            gap: 10px;
         }
         
-        #mapOverlay {
-            position: absolute;
-            top: 0;
-            left: 0;
-            width: 100%;
-            height: 100%;
-            background: rgba(0, 0, 0, 0.4);
-            z-index: 500;
-            display: none;
-        }
-        
-        #mindMapTitle {
-            font-size: 16px;
-            font-weight: bold;
-            margin-bottom: 10px;
-            color: #333;
-            text-align: center;
-            border-bottom: 2px solid #007AC2;
-            padding-bottom: 8px;
-        }
-        
-        #mindMapSvg {
-            width: 100%;
-            height: calc(100% - 40px);
-        }
-        
-        .node {
-            cursor: pointer;
-            stroke-width: 2px;
-        }
-        
-        .link {
-            fill: none;
-            stroke: #999;
-            stroke-width: 2px;
-        }
-        
-        .node-text {
-            font-size: 11px;
-            font-weight: 500;
-            text-anchor: middle;
-            dominant-baseline: central;
-            fill: #333;
-            pointer-events: none;
-        }
-        
-        .funding-text {
-            font-size: 9px;
-            text-anchor: start;
-            fill: #666;
-            pointer-events: none;
-        }
-        
-        .close-btn {
-            position: absolute;
-            top: 10px;
-            right: 10px;
-            cursor: pointer;
-            font-size: 20px;
-            color: #999;
-            background: none;
+        .control-button {
+            background: #007AC2;
+            color: white;
             border: none;
-            padding: 0;
+            padding: 10px 20px;
+            border-radius: 5px;
+            cursor: pointer;
+            font-size: 14px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.2);
+            transition: background 0.3s;
         }
         
-        .close-btn:hover {
-            color: #333;
+        .control-button:hover {
+            background: #005a91;
+        }
+        
+        .control-button.secondary {
+            background: #95a5a6;
+        }
+        
+        .control-button.secondary:hover {
+            background: #7f8c8d;
+        }
+        
+        .control-button.toggle-network {
+            background: #e74c3c;
+            font-size: 12px;
+            padding: 5px 10px;
+        }
+        
+        .control-button.toggle-network:hover {
+            background: #c0392b;
+        }
+        
+        #infoPanel {
+            position: absolute;
+            top: 15px;
+            right: 15px;
+            background: white;
+            padding: 15px;
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            max-width: 450px;
+            max-height: 85vh;
+            overflow-y: auto;
+            z-index: 99;
+        }
+        
+        .funding-overview {
+            background: #e8f4f8;
+            padding: 15px;
+            border-radius: 6px;
+            margin: 15px 0;
+            border-left: 5px solid #007AC2;
+        }
+        
+        .funding-overview h4 {
+            margin: 0 0 10px 0;
+            color: #005a91;
+            font-size: 16px;
+        }
+        
+        .funding-metric {
+            display: flex;
+            justify-content: space-between;
+            margin: 5px 0;
+            font-size: 12px;
+        }
+        
+        .funding-metric strong {
+            color: #2d3436;
         }
         
         .legend {
-            position: absolute;
-            bottom: 20px;
-            left: 20px;
-            background: rgba(255, 255, 255, 0.9);
-            padding: 10px;
-            border-radius: 5px;
-            font-size: 12px;
-            box-shadow: 0 2px 6px rgba(0,0,0,0.1);
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .legend h4 {
+            margin: 0 0 10px 0;
+            font-size: 14px;
         }
         
         .legend-item {
             display: flex;
             align-items: center;
+            margin: 5px 0;
+        }
+        
+        .legend-circle {
+            width: 12px;
+            height: 12px;
+            border-radius: 50%;
+            margin-right: 10px;
+            border: 2px solid white;
+            box-shadow: 0 0 2px rgba(0,0,0,0.3);
+        }
+        
+        .legend-line {
+            width: 30px;
+            height: 3px;
+            margin-right: 10px;
+        }
+        
+        .node-info {
+            margin-top: 15px;
+            padding-top: 15px;
+            border-top: 1px solid #ddd;
+        }
+        
+        .funding-details {
+            background: #f5f5f5;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            font-size: 13px;
+        }
+        
+        .funding-flow {
+            background: #fff3cd;
+            padding: 10px;
+            margin: 10px 0;
+            border-radius: 4px;
+            border-left: 4px solid #f39c12;
+            font-size: 12px;
+        }
+        
+        .branch-section {
+            margin: 10px 0;
+            padding: 10px;
+            background: #f9f9f9;
+            border-left: 4px solid #007AC2;
+            border-radius: 4px;
+        }
+        
+        .branch-title {
+            font-weight: bold;
             margin-bottom: 5px;
         }
         
-        .legend-color {
-            width: 15px;
-            height: 15px;
-            border-radius: 50%;
-            margin-right: 8px;
-            border: 2px solid #333;
+        .branch-details {
+            font-size: 12px;
+            color: #555;
+            margin: 5px 0;
         }
-
-        #loadingMessage {
+        
+        .stats-section {
+            background: #e8f4f8;
+            padding: 10px;
+            border-radius: 4px;
+            margin: 10px 0;
+            font-size: 13px;
+        }
+        
+        #loadingDiv {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(255, 255, 255, 0.9);
+            text-align: center;
+            background: white;
             padding: 20px;
             border-radius: 8px;
-            box-shadow: 0 4px 12px rgba(0,0,0,0.15);
-            z-index: 200;
-            font-size: 16px;
-            color: #333;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+        }
+        
+        .funding-pulse {
+            animation: fundingPulse 3s infinite;
+        }
+        
+        @keyframes fundingPulse {
+            0%, 100% { opacity: 0.6; }
+            50% { opacity: 1.0; }
+        }
+        
+        .high-funding-node {
+            animation: highlightPulse 2s infinite;
+        }
+        
+        @keyframes highlightPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+        
+        .tree-structure {
+            margin-left: 15px;
+            border-left: 2px solid #ddd;
+            padding-left: 10px;
+        }
+        
+        .tree-node {
+            margin: 5px 0;
+            position: relative;
         }
     </style>
+    <script src="https://js.arcgis.com/4.28/"></script>
 </head>
 <body>
-    <div id="loadingMessage">Loading map and data...</div>
-    <div id="mapOverlay"></div>
+    <div id="controlPanel">
+        <button class="control-button" onclick="resetView()">Reset View</button>
+        <button class="control-button secondary" onclick="expandAll()">Expand All Networks</button>
+        <button class="control-button secondary" onclick="collapseAll()">Collapse All</button>
+        <button class="control-button toggle-network" onclick="toggleNetworkView()">Toggle Network View</button>
+        <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
+            <small style="color: #666;">
+                <strong>Click</strong> organization to expand funding network<br>
+                <strong>Shift+Click</strong> for details only
+            </small>
+        </div>
+    </div>
+    
     <div id="viewDiv"></div>
     
-    <div id="mindMapContainer">
-        <button class="close-btn" onclick="closeMindMap()">&times;</button>
-        <div id="mindMapTitle">Funding Sources</div>
-        <svg id="mindMapSvg"></svg>
+    <div id="loadingDiv">
+        <h3>Loading Funding Network...</h3>
+        <p>Processing organization and funding data</p>
     </div>
     
-    <div class="legend">
-        <div class="legend-item">
-            <div class="legend-color" style="background: #FF6B6B;"></div>
-            <span>Border Region Organizations</span>
+    <div id="infoPanel">
+        <h3>🏛️ Organization Funding Network</h3>
+        <p><strong>18 Member Organizations</strong> - Funding Source Analysis</p>
+        
+        <div class="funding-overview">
+            <h4>💰 Funding Distribution</h4>
+            <div class="funding-metric">
+                <span>Border Organizations:</span>
+                <strong id="borderCount">-</strong>
+            </div>
+            <div class="funding-metric">
+                <span>Non-Border Organizations:</span>
+                <strong id="nonBorderCount">-</strong>
+            </div>
+            <div class="funding-metric">
+                <span>Total Funding Sources:</span>
+                <strong id="totalSources">-</strong>
+            </div>
+            <div class="funding-metric">
+                <span>National Sources:</span>
+                <strong id="nationalSources">-</strong>
+            </div>
+            <div style="margin-top: 10px; font-size: 11px; color: #636e72;">
+                <em>Funding flows from local to national levels across diverse geographic regions</em>
+            </div>
         </div>
-        <div class="legend-item">
-            <div class="legend-color" style="background: #4ECDC4;"></div>
-            <span>Non-Border Organizations</span>
+        
+        <div class="stats-section" id="statsSection">
+            <!-- Stats will be populated dynamically -->
         </div>
-        <div style="margin-top: 8px; font-weight: bold;">Click on markers to view funding hierarchy</div>
+        
+        <div class="legend">
+            <h4>Organization Types</h4>
+            <div class="legend-item">
+                <div class="legend-circle" style="background: #FF6B6B;"></div>
+                <span>Border Region Organizations</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle" style="background: #4ECDC4;"></div>
+                <span>Non-Border Organizations</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle" style="background: #f39c12;"></div>
+                <span>Local Funding Source</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle" style="background: #27AE60;"></div>
+                <span>Regional Funding Source</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle" style="background: #3498DB;"></div>
+                <span>Statewide Funding Source</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-circle" style="background: #9B59B6;"></div>
+                <span>National Funding Source</span>
+            </div>
+        </div>
+        
+        <div class="legend">
+            <h4>Funding Flow Types</h4>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #f39c12; width: 4px;"></div>
+                <span>Local Funding Flow</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #27AE60; width: 4px;"></div>
+                <span>Regional Funding Flow</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: #3498DB; width: 4px;"></div>
+                <span>Statewide Funding Flow</span>
+            </div>
+            <div class="legend-item">
+                <div class="legend-line" style="background: linear-gradient(90deg, #9B59B6, #8E44AD); width: 4px; animation: fundingPulse 3s infinite;"></div>
+                <span>National Funding Flow</span>
+            </div>
+        </div>
+        
+        <div class="node-info" id="nodeInfo">
+            <p>Click on organizations to view funding networks</p>
+        </div>
     </div>
 
-    <script type="module">
-        import Map from "https://js.arcgis.com/4.28/@arcgis/core/Map.js";
-        import MapView from "https://js.arcgis.com/4.28/@arcgis/core/views/MapView.js";
-        import Graphic from "https://js.arcgis.com/4.28/@arcgis/core/Graphic.js";
-        import GraphicsLayer from "https://js.arcgis.com/4.28/@arcgis/core/layers/GraphicsLayer.js";
-        import Point from "https://js.arcgis.com/4.28/@arcgis/core/geometry/Point.js";
-        import SimpleMarkerSymbol from "https://js.arcgis.com/4.28/@arcgis/core/symbols/SimpleMarkerSymbol.js";
-        import PopupTemplate from "https://js.arcgis.com/4.28/@arcgis/core/PopupTemplate.js";
-
-        let map, view;
+    <script>
+        // Global variables for visualization
+        let networkView = null;
+        let collapsedNodes = new Set();
+        let allNodes = {};
+        let allEdges = [];
+        let nodeLayer = null;
+        let edgeLayer = null;
+        let labelLayer = null;
+        let showNetworkView = true;
         let organizationData = [];
-
+        let renderTimeout = null;
+        
+        // Organization data
+        const orgData = {
+            "data": [
+                {
+                  "Member Organization": "1. Líderes Campesinas",
+                  "City": "Oxnard",
+                  "State": "CA",
+                  "County": "Ventura County",
+                  "State Region": "Southern California ",
+                  "Border Designation": "N/A",
+                  "Census Division": "Pacific Division, West Region",
+                  "# of Program Sites": "18: Coachella (Adults),\nCoachella (Youth),\nCosta Central,\nFresno,\nGreenfield,\nHuron,\nImperial Valley,\nKern (North),\nKern (South),\nMadera,\nMerced,\nSacramento, Yolo,\nSalinas,\nSoledad,\nSonoma, Napa,\nTulare,\nVentura,",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation, Sustainable Solutions Foundation"
+                },
+                {
+                  "Member Organization": "2. Campesinos Sin Fronteras",
+                  "City": "Yuma",
+                  "State": "AZ",
+                  "County": "Yuma County",
+                  "State Region": "Southwestern Arizona",
+                  "Border Designation": "U.S. Mexico Border Region ",
+                  "Census Division": "Mountain Division, Western Region",
+                  "# of Program Sites": "3: Yuma, Somerton, San Luis",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "3. La Mujer Obrera",
+                  "City": "El Paso",
+                  "State": "TX",
+                  "County": "El Paso County",
+                  "State Region": "Far West Texas",
+                  "Border Designation": "U.S. Mexico Border Region ",
+                  "Census Division": "West South Central Division, Southern Region",
+                  "# of Program Sites": "1: Chamizal",
+                  "Local Funding Sources": "El Paso Community Foundation, Paso del Norte Community Foundation, Gecu Foundation, The Hunt Family Foundation, Paul L Foster Family Foundation, The Sanders Foundation",
+                  "Regional Funding Sources": "Community Foundation of West Texas, West Central Texas Regional Foundation, The Arroyo Foundation, Greener Family Foundation",
+                  "Statewide Funding Sources": "Stinson Foundation, Carl B. & Florence E. King Foundation, Texas Center for Justice and Equity (TCJC), Feeding Texas, The Good Foundation of Texas, Robert J and Helen C Kleberg Foundation, Sid W Richardson Foundation, Lowe Foundation",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "4. Farmworker Assn of Florida",
+                  "City": "Apopka",
+                  "State": "FL",
+                  "County": "Orange County",
+                  "State Region": "Central Florida ",
+                  "Border Designation": "N/A",
+                  "Census Division": "South Atlantic Division, Southern Region",
+                  "# of Program Sites": "5: Apopka, Fellsmere, Homestead, Immokalee, Pierson",
+                  "Local Funding Sources": "The Westerman Foundation, The Miami Foundation, V 3 Family Foundation, The Mcmahon Foundation",
+                  "Regional Funding Sources": "Mestal Foundation, Orlando Health Foundation",
+                  "Statewide Funding Sources": "The Robert Oswald Family Foundation",
+                  "National Funding Sources": "Reynolds Family Foundation, The Morrison Family Foundation, Sapiente Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "5. Rural Coalition",
+                  "City": "Washington",
+                  "State": "DC",
+                  "County": "N/A",
+                  "State Region": "Mid-Atlantic",
+                  "Border Designation": "N/A",
+                  "Census Division": "South Atlantic Division, Southern Region",
+                  "# of Program Sites": "50:",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "6. Colonias Development Council",
+                  "City": "Las Cruces",
+                  "State": "NM",
+                  "County": "Doña Ana County; Otero County",
+                  "State Region": "Southern New Mexico",
+                  "Border Designation": "U.S. Mexico Border Region ",
+                  "Census Division": "Mountain Division, Western Region",
+                  "# of Program Sites": "3: Las Cruces, Hatch, Anthony",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "7. Grupo A.M.O.R",
+                  "City": "Homestead",
+                  "State": "FL",
+                  "County": "Miami-Dade County",
+                  "State Region": "South Florida",
+                  "Border Designation": "N/A",
+                  "Census Division": "South Atlantic Division, Southern Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "Brightseasons Foundation, ",
+                  "Regional Funding Sources": "Health Foundation of South Florida, South Florida Youth Foundation, Community Health Foundation, Paul Palank Memorial Foundation, Jonathan and Karen Fryd Family Foundation, The Miami Foundation",
+                  "Statewide Funding Sources": "Mestal Foundation, The Robert Oswald Family Foundation",
+                  "National Funding Sources": "Reynolds Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "8. Mujeres Campesinas Unidas de Florida",
+                  "City": "Immokalee",
+                  "State": "FL",
+                  "County": "Collier County",
+                  "State Region": "Southwest Florida",
+                  "Border Designation": "N/A",
+                  "Census Division": "South Atlantic Division, Southern Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "9. Mujeres Divinas",
+                  "City": "Syracuse",
+                  "State": "NY",
+                  "County": "Onondaga County",
+                  "State Region": "Central New York",
+                  "Border Designation": "N/A",
+                  "Census Division": "Middle Atlantic Division, Northeast Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "Allyn Family Foundation, The Leonard and Irwin Kamp Foundation, ",
+                  "Regional Funding Sources": "Thorn Family Foundation, Central New York Community Foundation, Fletcher Foundation, The John Ben Snow Foundation",
+                  "Statewide Funding Sources": "The William G Pomeroy Foundation, Tarky Lombardi Foundation, Venture Jobs Foundation, Fred L. Emerson Foundation, Grandma Brown Foundation",
+                  "National Funding Sources": "The Schneider Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "10. Mujeres Luchadoras Progresistas",
+                  "City": "Salem",
+                  "State": "OR",
+                  "County": "Marion County",
+                  "State Region": "Willamette Valley, Western Oregon",
+                  "Border Designation": "N/A",
+                  "Census Division": "Pacific Division, West Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "11. Workers Center of Central NY",
+                  "City": "Syracuse",
+                  "State": "NY",
+                  "County": "Onondaga County",
+                  "State Region": "Central New York",
+                  "Border Designation": "N/A",
+                  "Census Division": "Middle Atlantic Division, Northeast Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "Thorn Family Foundation, Central New York Community Foundation, Fletcher Foundation, The John Ben Snow Foundation",
+                  "Statewide Funding Sources": "The William G Pomeroy Foundation, Tarky Lombardi Foundation, Venture Jobs Foundation, Fred L. Emerson Foundation, Grandma Brown Foundation",
+                  "National Funding Sources": "The Schneider Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "12. Worker Justice Center of NY",
+                  "City": "Rochester",
+                  "State": "NY",
+                  "County": "Monroe County; Ulster County; Westchester County",
+                  "State Region": "Western New York; Hudson Valley",
+                  "Border Designation": "N/A",
+                  "Census Division": "Middle Atlantic Division, Northeast Region ",
+                  "# of Program Sites": "Western New York; Hudson Valley; Lower Hudson Valley ",
+                  "Local Funding Sources": "Eayres Hope Foundation, ",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "The William G Pomeroy Foundation, Tarky Lombardi Foundation, Venture Jobs Foundation, Fred L. Emerson Foundation, Grandma Brown Foundation",
+                  "National Funding Sources": "The Schneider Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "13. Pineros y Campesinos Unidos del Noroeste (PCUN)",
+                  "City": "Woodburn",
+                  "State": "OR",
+                  "County": "Marion County",
+                  "State Region": "Western Oregon / Willamette Valley",
+                  "Border Designation": "N/A",
+                  "Census Division": "Pacific Division, Western Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "14. Campesinos Unidos de California",
+                  "City": "Oxnard",
+                  "State": "CA",
+                  "County": "Ventura County",
+                  "State Region": "Southern California ",
+                  "Border Designation": "N/A",
+                  "Census Division": "Pacific Division, Western Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "15. Compañeras Campesinas",
+                  "City": "Raleigh",
+                  "State": "NC",
+                  "County": "Wake County ",
+                  "State Region": "Piedmont Region of North Carolina ",
+                  "Border Designation": "N/A",
+                  "Census Division": "South Atlantic Division, Southern Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "Harris Family Foundation, The Franklin Lewis Robuck Family Foundation, Nancy A Wright Foundation, Gipson Family Foundation, Bethea Legacy Foundation, JJCJ Foundation, Clay Foundation - East, Thomas B Dameron JR Foundation",
+                  "Regional Funding Sources": "Mitscherlich Foundation, Troan Foundation, The Catherine Jefferson Foundation",
+                  "Statewide Funding Sources": "C Hamilton Sloan Foundation, The Rolander Family Foundation, Isley Family Foundation",
+                  "National Funding Sources": "Top Family Foundation, Fowler Family Foundation, The Asha and Sajjan Agarwal Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation, Sustainable Solutions Foundation"
+                },
+                {
+                  "Member Organization": "16. Multicultural Efforts To End Sexual Assault (MESA)",
+                  "City": "W. Lafayette",
+                  "State": "IN",
+                  "County": "Tippecanoe County",
+                  "State Region": "West Central Indiana ",
+                  "Border Designation": "N/A",
+                  "Census Division": "East North Central Divsion, Midwest Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "The Church Family Foundation",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "17. Amigas Unidas",
+                  "City": "Yakima",
+                  "State": "WA",
+                  "County": "Yakima County",
+                  "State Region": "Central Washington",
+                  "Border Designation": "N/A",
+                  "Census Division": "Pacific Division, West Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "Yakima Valley Community Foundation, New Vision Foundation / Yakima County Development Association, Johanna A Rodman Foundation, The Fred C and Dolores R Williams Foundation, Bacon Legacy Foundation",
+                  "Regional Funding Sources": "Blue Mountain Community Foundation, Community Foundation for SW Washington, Community Foundation of NCW, Icicle Fund",
+                  "Statewide Funding Sources": "Manzana Foundation, Singh Family Foundation Washington, Latino Community Fund of Washington State, Foundation for Healthy Generations (CHEF)",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                },
+                {
+                  "Member Organization": "18. Centro de los Derechos del Migrante, Inc.",
+                  "City": "Baltimore",
+                  "State": "MD",
+                  "County": "Baltimore City",
+                  "State Region": "Central Maryland Region",
+                  "Border Designation": "N/A",
+                  "Census Division": "South Atlantic Division, South Region",
+                  "# of Program Sites": "",
+                  "Local Funding Sources": "",
+                  "Regional Funding Sources": "",
+                  "Statewide Funding Sources": "",
+                  "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
+                }
+              ]
+        };
+        
         // Function to get coordinates for cities
         function getCoordinates(city, state) {
             const coordinates = {
@@ -202,9 +627,9 @@
             };
             
             const key = `${city}, ${state}`;
-            return coordinates[key] || [-98, 39]; // Default to center of US if not found
+            return coordinates[key] || [-98, 39];
         }
-
+        
         // Function to parse funding sources from string
         function parseFundingSources(sourcesString) {
             if (!sourcesString || sourcesString.trim() === '') {
@@ -212,613 +637,621 @@
             }
             return sourcesString.split(',').map(source => source.trim()).filter(source => source !== '');
         }
-
-        function setupClickHandler() {
-            view.on("click", function(event) {
-                view.hitTest(event).then(function(response) {
-                    if (response.results.length > 0) {
-                        const clickedGraphic = response.results.find(result => 
-                            result.graphic.attributes && result.graphic.attributes.name
-                        );
-                        
-                        if (clickedGraphic && clickedGraphic.graphic.attributes.name) {
-                            setTimeout(() => {
-                                showMindMap(clickedGraphic.graphic.attributes.name);
-                            }, 100);
-                        }
-                    }
-                });
-            });
+        
+        // Function to toggle network view
+        window.toggleNetworkView = function() {
+            showNetworkView = !showNetworkView;
+            debouncedUpdateVisualization();
         }
-
-        // Initialize the map
-        async function initializeMap() {
-            try {
-                // Create map
-                map = new Map({
-                    basemap: "gray-vector"
-                });
-
-                // Create view
-                view = new MapView({
-                    container: "viewDiv",
-                    map: map,
-                    zoom: 4,
-                    center: [-98, 39]
-                });
-
-                // Create graphics layer for organizations
-                const graphicsLayer = new GraphicsLayer();
-                map.add(graphicsLayer);
-
-                // Wait for view to load
-                await view.when();
-                
-                // Load data from JSON file
-                const data = await loadOrganizationData();
-                organizationData = data;
-                addOrganizationsToMap(data, graphicsLayer);
-                
-                // Add click event handler after everything is loaded
-                setupClickHandler();
-                
-                document.getElementById('loadingMessage').style.display = 'none';
-                
-            } catch (error) {
-                console.error('Error initializing map:', error);
-                document.getElementById('loadingMessage').textContent = 'Error loading map. Please refresh the page.';
-            }
-        }
-
-        async function loadOrganizationData() {
-            try {
-                // Use the hardcoded data from your JSON file
-                const jsonData = {
-                    "data": [
-                        {
-                          "Member Organization": "1. Líderes Campesinas",
-                          "City": "Oxnard",
-                          "State": "CA",
-                          "County": "Ventura County",
-                          "State Region": "Southern California ",
-                          "Border Designation": "N/A",
-                          "Census Division": "Pacific Division, West Region",
-                          "# of Program Sites": "18: Coachella (Adults),\nCoachella (Youth),\nCosta Central,\nFresno,\nGreenfield,\nHuron,\nImperial Valley,\nKern (North),\nKern (South),\nMadera,\nMerced,\nSacramento, Yolo,\nSalinas,\nSoledad,\nSonoma, Napa,\nTulare,\nVentura,",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation, Sustainable Solutions Foundation"
-                        },
-                        {
-                          "Member Organization": "2. Campesinos Sin Fronteras",
-                          "City": "Yuma",
-                          "State": "AZ",
-                          "County": "Yuma County",
-                          "State Region": "Southwestern Arizona",
-                          "Border Designation": "U.S. Mexico Border Region ",
-                          "Census Division": "Mountain Division, Western Region",
-                          "# of Program Sites": "3: Yuma, Somerton, San Luis",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "3. La Mujer Obrera",
-                          "City": "El Paso",
-                          "State": "TX",
-                          "County": "El Paso County",
-                          "State Region": "Far West Texas",
-                          "Border Designation": "U.S. Mexico Border Region ",
-                          "Census Division": "West South Central Division, Southern Region",
-                          "# of Program Sites": "1: Chamizal",
-                          "Local Funding Sources": "El Paso Community Foundation, Paso del Norte Community Foundation, Gecu Foundation, The Hunt Family Foundation, Paul L Foster Family Foundation, The Sanders Foundation",
-                          "Regional Funding Sources": "Community Foundation of West Texas, West Central Texas Regional Foundation, The Arroyo Foundation, Greener Family Foundation",
-                          "Statewide Funding Sources": "Stinson Foundation, Carl B. & Florence E. King Foundation, Texas Center for Justice and Equity (TCJC), Feeding Texas, The Good Foundation of Texas, Robert J and Helen C Kleberg Foundation, Sid W Richardson Foundation, Lowe Foundation",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "4. Farmworker Assn of Florida",
-                          "City": "Apopka",
-                          "State": "FL",
-                          "County": "Orange County",
-                          "State Region": "Central Florida ",
-                          "Border Designation": "N/A",
-                          "Census Division": "South Atlantic Division, Southern Region",
-                          "# of Program Sites": "5: Apopka, Fellsmere, Homestead, Immokalee, Pierson",
-                          "Local Funding Sources": "The Westerman Foundation, The Miami Foundation, V 3 Family Foundation, The Mcmahon Foundation",
-                          "Regional Funding Sources": "Mestal Foundation, Orlando Health Foundation",
-                          "Statewide Funding Sources": "The Robert Oswald Family Foundation",
-                          "National Funding Sources": "Reynolds Family Foundation, The Morrison Family Foundation, Sapiente Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "5. Rural Coalition",
-                          "City": "Washington",
-                          "State": "DC",
-                          "County": "N/A",
-                          "State Region": "Mid-Atlantic",
-                          "Border Designation": "N/A",
-                          "Census Division": "South Atlantic Division, Southern Region",
-                          "# of Program Sites": "50:",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "6. Colonias Development Council",
-                          "City": "Las Cruces",
-                          "State": "NM",
-                          "County": "Doña Ana County; Otero County",
-                          "State Region": "Southern New Mexico",
-                          "Border Designation": "U.S. Mexico Border Region ",
-                          "Census Division": "Mountain Division, Western Region",
-                          "# of Program Sites": "3: Las Cruces, Hatch, Anthony",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "7. Grupo A.M.O.R",
-                          "City": "Homestead",
-                          "State": "FL",
-                          "County": "Miami-Dade County",
-                          "State Region": "South Florida",
-                          "Border Designation": "N/A",
-                          "Census Division": "South Atlantic Division, Southern Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "Brightseasons Foundation, ",
-                          "Regional Funding Sources": "Health Foundation of South Florida, South Florida Youth Foundation, Community Health Foundation, Paul Palank Memorial Foundation, Jonathan and Karen Fryd Family Foundation, The Miami Foundation",
-                          "Statewide Funding Sources": "Mestal Foundation, The Robert Oswald Family Foundation",
-                          "National Funding Sources": "Reynolds Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "8. Mujeres Campesinas Unidas de Florida",
-                          "City": "Immokalee",
-                          "State": "FL",
-                          "County": "Collier County",
-                          "State Region": "Southwest Florida",
-                          "Border Designation": "N/A",
-                          "Census Division": "South Atlantic Division, Southern Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "9. Mujeres Divinas",
-                          "City": "Syracuse",
-                          "State": "NY",
-                          "County": "Onondaga County",
-                          "State Region": "Central New York",
-                          "Border Designation": "N/A",
-                          "Census Division": "Middle Atlantic Division, Northeast Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "Allyn Family Foundation, The Leonard and Irwin Kamp Foundation, ",
-                          "Regional Funding Sources": "Thorn Family Foundation, Central New York Community Foundation, Fletcher Foundation, The John Ben Snow Foundation",
-                          "Statewide Funding Sources": "The William G Pomeroy Foundation, Tarky Lombardi Foundation, Venture Jobs Foundation, Fred L. Emerson Foundation, Grandma Brown Foundation",
-                          "National Funding Sources": "The Schneider Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "10. Mujeres Luchadoras Progresistas",
-                          "City": "Salem",
-                          "State": "OR",
-                          "County": "Marion County",
-                          "State Region": "Willamette Valley, Western Oregon",
-                          "Border Designation": "N/A",
-                          "Census Division": "Pacific Division, West Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "11. Workers Center of Central NY",
-                          "City": "Syracuse",
-                          "State": "NY",
-                          "County": "Onondaga County",
-                          "State Region": "Central New York",
-                          "Border Designation": "N/A",
-                          "Census Division": "Middle Atlantic Division, Northeast Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "Thorn Family Foundation, Central New York Community Foundation, Fletcher Foundation, The John Ben Snow Foundation",
-                          "Statewide Funding Sources": "The William G Pomeroy Foundation, Tarky Lombardi Foundation, Venture Jobs Foundation, Fred L. Emerson Foundation, Grandma Brown Foundation",
-                          "National Funding Sources": "The Schneider Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "12. Worker Justice Center of NY",
-                          "City": "Rochester",
-                          "State": "NY",
-                          "County": "Monroe County; Ulster County; Westchester County",
-                          "State Region": "Western New York; Hudson Valley",
-                          "Border Designation": "N/A",
-                          "Census Division": "Middle Atlantic Division, Northeast Region ",
-                          "# of Program Sites": "Western New York; Hudson Valley; Lower Hudson Valley ",
-                          "Local Funding Sources": "Eayres Hope Foundation, ",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "The William G Pomeroy Foundation, Tarky Lombardi Foundation, Venture Jobs Foundation, Fred L. Emerson Foundation, Grandma Brown Foundation",
-                          "National Funding Sources": "The Schneider Family Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "13. Pineros y Campesinos Unidos del Noroeste (PCUN)",
-                          "City": "Woodburn",
-                          "State": "OR",
-                          "County": "Marion County",
-                          "State Region": "Western Oregon / Willamette Valley",
-                          "Border Designation": "N/A",
-                          "Census Division": "Pacific Division, Western Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "14. Campesinos Unidos de California",
-                          "City": "Oxnard",
-                          "State": "CA",
-                          "County": "Ventura County",
-                          "State Region": "Southern California ",
-                          "Border Designation": "N/A",
-                          "Census Division": "Pacific Division, Western Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "15. Compañeras Campesinas",
-                          "City": "Raleigh",
-                          "State": "NC",
-                          "County": "Wake County ",
-                          "State Region": "Piedmont Region of North Carolina ",
-                          "Border Designation": "N/A",
-                          "Census Division": "South Atlantic Division, Southern Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "Harris Family Foundation, The Franklin Lewis Robuck Family Foundation, Nancy A Wright Foundation, Gipson Family Foundation, Bethea Legacy Foundation, JJCJ Foundation, Clay Foundation - East, Thomas B Dameron JR Foundation",
-                          "Regional Funding Sources": "Mitscherlich Foundation, Troan Foundation, The Catherine Jefferson Foundation",
-                          "Statewide Funding Sources": "C Hamilton Sloan Foundation, The Rolander Family Foundation, Isley Family Foundation",
-                          "National Funding Sources": "Top Family Foundation, Fowler Family Foundation, The Asha and Sajjan Agarwal Foundation, Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation, Sustainable Solutions Foundation"
-                        },
-                        {
-                          "Member Organization": "16. Multicultural Efforts To End Sexual Assault (MESA)",
-                          "City": "W. Lafayette",
-                          "State": "IN",
-                          "County": "Tippecanoe County",
-                          "State Region": "West Central Indiana ",
-                          "Border Designation": "N/A",
-                          "Census Division": "East North Central Divsion, Midwest Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "The Church Family Foundation",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "17. Amigas Unidas",
-                          "City": "Yakima",
-                          "State": "WA",
-                          "County": "Yakima County",
-                          "State Region": "Central Washington",
-                          "Border Designation": "N/A",
-                          "Census Division": "Pacific Division, West Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "Yakima Valley Community Foundation, New Vision Foundation / Yakima County Development Association, Johanna A Rodman Foundation, The Fred C and Dolores R Williams Foundation, Bacon Legacy Foundation",
-                          "Regional Funding Sources": "Blue Mountain Community Foundation, Community Foundation for SW Washington, Community Foundation of NCW, Icicle Fund",
-                          "Statewide Funding Sources": "Manzana Foundation, Singh Family Foundation Washington, Latino Community Fund of Washington State, Foundation for Healthy Generations (CHEF)",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        },
-                        {
-                          "Member Organization": "18. Centro de los Derechos del Migrante, Inc.",
-                          "City": "Baltimore",
-                          "State": "MD",
-                          "County": "Baltimore City",
-                          "State Region": "Central Maryland Region",
-                          "Border Designation": "N/A",
-                          "Census Division": "South Atlantic Division, South Region",
-                          "# of Program Sites": "",
-                          "Local Funding Sources": "",
-                          "Regional Funding Sources": "",
-                          "Statewide Funding Sources": "",
-                          "National Funding Sources": "Local Initiatives Support Corporation, Hilton Foundation, Kresge Foundation"
-                        }
-                      ]
-                };
-                
-                // Process the data from your JSON format
-                const processedData = jsonData.data.map(org => ({
-                    name: org['Member Organization'],
-                    city: org.City,
-                    state: org.State,
-                    county: org.County,
-                    region: org['State Region'],
-                    borderDesignation: org['Border Designation'],
-                    censusDivision: org['Census Division'],
-                    programSites: org['# of Program Sites'],
-                    coordinates: getCoordinates(org.City, org.State),
-                    funding: {
-                        local: parseFundingSources(org['Local Funding Sources']),
-                        regional: parseFundingSources(org['Regional Funding Sources']),
-                        statewide: parseFundingSources(org['Statewide Funding Sources']),
-                        national: parseFundingSources(org['National Funding Sources'])
-                    }
-                }));
-                
-                console.log('Loaded', processedData.length, 'organizations');
-                return processedData;
-            } catch (error) {
-                console.error('Error loading organization data:', error);
-                // Return empty array if there's an error
-                return [];
-            }
-        }
-
-        function addOrganizationsToMap(data, graphicsLayer) {
-            data.forEach(org => {
-                const point = new Point({
-                    longitude: org.coordinates[0],
-                    latitude: org.coordinates[1]
-                });
-
-                // Different colors for border vs non-border regions
-                const isBorder = org.borderDesignation && org.borderDesignation !== 'N/A';
-                const color = isBorder ? [255, 107, 107] : [78, 205, 196];
-
-                const markerSymbol = new SimpleMarkerSymbol({
-                    color: color,
-                    outline: {
-                        color: [40, 40, 40],
-                        width: 2
-                    },
-                    size: 14
-                });
-
-                const popupTemplate = new PopupTemplate({
-                    title: org.name,
-                    content: `
-                        <div style="font-size: 14px;">
-                            <p><strong>Location:</strong> ${org.city}, ${org.state}</p>
-                            <p><strong>County:</strong> ${org.county}</p>
-                            <p><strong>Region:</strong> ${org.region}</p>
-                            <p><strong>Border Designation:</strong> ${org.borderDesignation || 'N/A'}</p>
-                            <p><strong>Program Sites:</strong> ${org.programSites}</p>
-                            <div style="margin-top: 15px; padding: 10px; background: #f0f8ff; border-radius: 5px; text-align: center; border: 1px solid #007AC2;">
-                                <p style="margin: 0; color: #007AC2; font-weight: bold;">📊 Funding Hierarchy Opened</p>
-                                <p style="margin: 5px 0 0 0; font-size: 12px; color: #666;">View funding sources on the right panel</p>
-                            </div>
-                        </div>
-                    `
-                });
-
-                const graphic = new Graphic({
-                    geometry: point,
-                    symbol: markerSymbol,
-                    popupTemplate: popupTemplate,
-                    attributes: {
-                        name: org.name,
-                        orgData: org
-                    }
-                });
-
-                graphicsLayer.add(graphic);
-            });
-        }
-
-        function showMindMap(orgName) {
-            console.log('Showing mind map for:', orgName);
-            const org = organizationData.find(o => o.name === orgName);
-            if (!org) {
-                console.error('Organization not found:', orgName);
-                return;
-            }
-
-            // Show overlay to fade background
-            document.getElementById('mapOverlay').style.display = 'block';
-            
-            // Focus on the organization
-            view.goTo({
-                center: org.coordinates,
-                zoom: 8
-            }, {
-                duration: 1000,
-                easing: "ease-in-out"
-            });
-
-            const mindMapData = createMindMapData(org);
-            document.getElementById('mindMapTitle').textContent = `${orgName} - Funding Sources`;
-            document.getElementById('mindMapContainer').style.display = 'block';
-            
-            renderMindMap(mindMapData);
-        }
-
-        function closeMindMap() {
-            document.getElementById('mindMapContainer').style.display = 'none';
-            document.getElementById('mapOverlay').style.display = 'none';
-            
-            // Return to full map view
-            view.goTo({
+        
+        // Function to reset view
+        window.resetView = function() {
+            collapsedNodes.clear();
+            networkView.goTo({
                 center: [-98, 39],
                 zoom: 4
-            }, {
-                duration: 1000,
-                easing: "ease-in-out"
             });
         }
-
-        // Make functions globally available immediately
-        window.showMindMap = showMindMap;
-        window.closeMindMap = closeMindMap;
-
-        // Add click handler to overlay to close mind map
-        document.getElementById('mapOverlay').addEventListener('click', closeMindMap);
-
-        function createMindMapData(org) {
-            const data = {
-                name: org.name.length > 20 ? org.name.substring(0, 17) + '...' : org.name,
-                children: [
-                    {
-                        name: 'Local',
-                        color: '#FF6B6B',
-                        children: org.funding.local.map(source => ({ name: source, isLeaf: true })),
-                        expanded: false
-                    },
-                    {
-                        name: 'Regional',
-                        color: '#4ECDC4',
-                        children: org.funding.regional.map(source => ({ name: source, isLeaf: true })),
-                        expanded: false
-                    },
-                    {
-                        name: 'Statewide',
-                        color: '#45B7D1',
-                        children: org.funding.statewide.map(source => ({ name: source, isLeaf: true })),
-                        expanded: false
-                    },
-                    {
-                        name: 'National',
-                        color: '#F7DC6F',
-                        children: org.funding.national.map(source => ({ name: source, isLeaf: true })),
-                        expanded: false
-                    }
-                ].filter(category => category.children.length > 0) // Only show categories with funding sources
-            };
-            return data;
+        
+        // Function to expand all nodes
+        window.expandAll = function() {
+            collapsedNodes.clear();
+            debouncedUpdateVisualization();
         }
-
-        function renderMindMap(data) {
-            console.log('Rendering mind map with data:', data);
+        
+        // Function to collapse all nodes
+        window.collapseAll = function() {
+            Object.entries(allNodes).forEach(([nodeId, node]) => {
+                if (node.type === 'organization') {
+                    collapsedNodes.add(nodeId);
+                }
+            });
+            debouncedUpdateVisualization();
+        }
+        
+        // Function to toggle node expansion
+        window.toggleNodeExpansion = function(nodeId) {
+            if (collapsedNodes.has(nodeId)) {
+                collapsedNodes.delete(nodeId);
+            } else {
+                collapsedNodes.add(nodeId);
+            }
+            debouncedUpdateVisualization();
+        }
+        
+        // Debounced update function
+        function debouncedUpdateVisualization() {
+            if (renderTimeout) {
+                clearTimeout(renderTimeout);
+            }
+            renderTimeout = setTimeout(() => {
+                updateNetworkVisualization();
+            }, 100);
+        }
+        
+        // Function to check if a node should be visible
+        function isNodeVisible(nodeId, nodes, edges) {
+            const node = nodes[nodeId];
+            if (!node) return false;
             
-            const svg = d3.select('#mindMapSvg');
-            svg.selectAll('*').remove();
-
-            const width = 370;
-            const height = 450;
+            if (node.type === 'organization') return true;
             
-            const g = svg.append('g');
-
-            // Create hierarchical layout
-            const root = d3.hierarchy(data);
-            const treeLayout = d3.tree().size([width - 120, height - 120]);
-            treeLayout(root);
-
-            console.log('Hierarchy created with nodes:', root.descendants().length);
-
-            // Draw links first
-            const linkData = root.links();
-            console.log('Drawing', linkData.length, 'links');
-            
-            const links = g.selectAll('.link')
-                .data(linkData)
-                .enter()
-                .append('path')
-                .attr('class', 'link')
-                .attr('d', d3.linkVertical()
-                    .x(d => d.x + 60)
-                    .y(d => d.y + 60)
-                )
-                .style('stroke', '#999')
-                .style('stroke-width', 2)
-                .style('fill', 'none');
-
-            // Draw nodes
-            const nodeData = root.descendants();
-            console.log('Drawing', nodeData.length, 'nodes');
-            
-            const nodes = g.selectAll('.node')
-                .data(nodeData)
-                .enter()
-                .append('g')
-                .attr('class', 'node')
-                .attr('transform', d => `translate(${d.x + 60}, ${d.y + 60})`)
-                .style('cursor', d => d.depth === 1 && d.children ? 'pointer' : 'default')
-                .on('click', handleNodeClick);
-
-            // Add circles for nodes
-            nodes.append('circle')
-                .attr('r', d => d.depth === 0 ? 12 : (d.depth === 1 ? 10 : 6))
-                .style('fill', d => {
-                    if (d.depth === 0) return '#333';
-                    if (d.depth === 1) return d.data.color || '#666';
-                    return '#f0f0f0';
-                })
-                .style('stroke', '#333')
-                .style('stroke-width', 2);
-
-            // Add text labels
-            nodes.append('text')
-                .attr('dy', d => d.depth === 0 ? -18 : (d.depth === 1 ? -15 : 3))
-                .attr('text-anchor', 'middle')
-                .text(d => {
-                    let name = d.data.name;
-                    if (name.length > 25) {
-                        return name.substring(0, 22) + '...';
-                    }
-                    return name;
-                })
-                .style('font-size', d => d.depth === 0 ? '11px' : (d.depth === 1 ? '12px' : '9px'))
-                .style('font-weight', d => d.depth <= 1 ? 'bold' : 'normal')
-                .style('fill', '#333')
-                .style('pointer-events', 'none');
-
-            // Add funding count for category nodes
-            nodes.filter(d => d.depth === 1)
-                .append('text')
-                .attr('dy', 25)
-                .attr('text-anchor', 'middle')
-                .text(d => `(${d.children ? d.children.length : 0} sources)`)
-                .style('font-size', '9px')
-                .style('fill', '#666')
-                .style('pointer-events', 'none');
-
-            // Add click instruction for category nodes
-            nodes.filter(d => d.depth === 1 && d.children && d.children.length > 0)
-                .append('text')
-                .attr('dy', 38)
-                .attr('text-anchor', 'middle')
-                .text('Click to expand')
-                .style('font-size', '8px')
-                .style('fill', '#999')
-                .style('pointer-events', 'none');
-
-            // Initially hide all leaf nodes (depth 2)
-            nodes.filter(d => d.depth === 2).style('display', 'none');
-            links.filter(d => d.target.depth === 2).style('display', 'none');
-
-            function handleNodeClick(event, d) {
-                console.log('Node clicked:', d.data.name, 'depth:', d.depth, 'has children:', !!d.children);
-                
-                if (d.depth === 1 && d.children && d.children.length > 0) {
-                    const isExpanded = d.data.expanded;
-                    d.data.expanded = !isExpanded;
-                    
-                    console.log('Toggling expansion for', d.data.name, 'to', d.data.expanded);
-                    
-                    // Toggle visibility of child nodes and links
-                    const childNodes = nodes.filter(node => node.parent === d);
-                    const childLinks = links.filter(link => link.source === d);
-                    
-                    if (d.data.expanded) {
-                        childNodes.style('display', 'block');
-                        childLinks.style('display', 'block');
-                    } else {
-                        childNodes.style('display', 'none');
-                        childLinks.style('display', 'none');
-                    }
-                    
-                    // Update click instruction
-                    d3.select(this).select('text:last-child')
-                        .text(d.data.expanded ? 'Click to collapse' : 'Click to expand');
+            const ancestors = getNodeAncestors(nodeId, edges);
+            for (const ancestorId of ancestors) {
+                if (collapsedNodes.has(ancestorId)) {
+                    return false;
                 }
             }
+            
+            return true;
         }
-
-        // Initialize the map when the page loads
-        initializeMap();
+        
+        // Function to get all ancestors of a node
+        function getNodeAncestors(nodeId, edges) {
+            const ancestors = [];
+            let currentId = nodeId;
+            
+            while (currentId) {
+                const parentEdge = edges.find(e => e.to === currentId);
+                if (parentEdge) {
+                    ancestors.push(parentEdge.from);
+                    currentId = parentEdge.from;
+                } else {
+                    break;
+                }
+            }
+            
+            return ancestors;
+        }
+        
+        // Function to check if a node has children
+        function hasChildNodes(nodeId) {
+            return allEdges.some(edge => edge.from === nodeId);
+        }
+        
+        // Function to count direct children of a node
+        function countDirectChildren(nodeId) {
+            return allEdges.filter(edge => edge.from === nodeId).length;
+        }
+        
+        // Function to count collapsed children
+        function countCollapsedChildren(nodeId, nodes, edges) {
+            let count = 0;
+            const children = edges.filter(e => e.from === nodeId).map(e => e.to);
+            
+            children.forEach(childId => {
+                if (!isNodeVisible(childId, nodes, edges)) {
+                    count++;
+                }
+                count += countCollapsedChildren(childId, nodes, edges);
+            });
+            
+            return count;
+        }
+        
+        // Build network data structure with funding awareness
+        function buildNetworkData(organizations) {
+            const nodes = {};
+            const edges = [];
+            let nodeIdCounter = 0;
+            
+            // Process each organization
+            organizations.forEach((org, orgIndex) => {
+                const orgId = `org_${orgIndex}`;
+                const coordinates = getCoordinates(org.city, org.state);
+                const isBorder = org.borderDesignation && org.borderDesignation !== 'N/A';
+                
+                // Create organization node
+                nodes[orgId] = {
+                    id: orgId,
+                    name: org.name,
+                    type: 'organization',
+                    color: isBorder ? '#FF6B6B' : '#4ECDC4',
+                    details: `${org.city}, ${org.state} - ${org.county}`,
+                    coords: coordinates,
+                    data: org,
+                    connections: 0,
+                    isBorder: isBorder,
+                    totalFundingSources: org.funding.local.length + org.funding.regional.length + 
+                                       org.funding.statewide.length + org.funding.national.length
+                };
+                
+                // Process funding categories
+                const fundingCategories = [
+                    { name: 'Local', sources: org.funding.local, color: '#f39c12' },
+                    { name: 'Regional', sources: org.funding.regional, color: '#27AE60' },
+                    { name: 'Statewide', sources: org.funding.statewide, color: '#3498DB' },
+                    { name: 'National', sources: org.funding.national, color: '#9B59B6' }
+                ];
+                
+                fundingCategories.forEach((category, catIndex) => {
+                    if (category.sources.length > 0) {
+                        const catId = `${orgId}_cat_${catIndex}`;
+                        
+                        // Create category node
+                        const catCoords = [
+                            coordinates[0] + (Math.cos((catIndex * 90) * Math.PI / 180) * 0.5),
+                            coordinates[1] + (Math.sin((catIndex * 90) * Math.PI / 180) * 0.5)
+                        ];
+                        
+                        nodes[catId] = {
+                            id: catId,
+                            name: category.name,
+                            type: 'category',
+                            color: category.color,
+                            details: `${category.sources.length} funding sources`,
+                            coords: catCoords,
+                            connections: 0,
+                            fundingLevel: category.name.toLowerCase(),
+                            sourceCount: category.sources.length
+                        };
+                        
+                        // Create edge from organization to category
+                        edges.push({
+                            from: orgId,
+                            to: catId,
+                            type: 'funding_category',
+                            color: category.color,
+                            level: category.name.toLowerCase()
+                        });
+                        
+                        // Process individual funding sources
+                        category.sources.forEach((source, sourceIndex) => {
+                            const sourceId = `${catId}_source_${sourceIndex}`;
+                            
+                            // Create source node positioned around category
+                            const angle = (sourceIndex / category.sources.length) * 2 * Math.PI;
+                            const radius = 0.3;
+                            const sourceCoords = [
+                                catCoords[0] + (Math.cos(angle) * radius),
+                                catCoords[1] + (Math.sin(angle) * radius)
+                            ];
+                            
+                            nodes[sourceId] = {
+                                id: sourceId,
+                                name: source,
+                                type: 'funding_source',
+                                color: category.color,
+                                details: `${category.name} funding source`,
+                                coords: sourceCoords,
+                                connections: 0,
+                                fundingLevel: category.name.toLowerCase(),
+                                parentOrg: org.name
+                            };
+                            
+                            // Create edge from category to source
+                            edges.push({
+                                from: catId,
+                                to: sourceId,
+                                type: 'funding_flow',
+                                color: category.color,
+                                level: category.name.toLowerCase()
+                            });
+                        });
+                    }
+                });
+            });
+            
+            // Update connection counts
+            edges.forEach(edge => {
+                if (nodes[edge.from]) nodes[edge.from].connections++;
+                if (nodes[edge.to]) nodes[edge.to].connections++;
+            });
+            
+            return { nodes, edges };
+        }
+        
+        // Function to update network visualization
+        function updateNetworkVisualization() {
+            if (!networkView || !nodeLayer || !edgeLayer || !labelLayer) return;
+            
+            // Clear all layers
+            nodeLayer.removeAll();
+            edgeLayer.removeAll();
+            labelLayer.removeAll();
+            
+            // Batch graphics for better performance
+            const nodeGraphics = [];
+            const edgeGraphics = [];
+            const labelGraphics = [];
+            
+            require([
+                "esri/geometry/Point",
+                "esri/geometry/Polyline", 
+                "esri/Graphic",
+                "esri/symbols/SimpleMarkerSymbol",
+                "esri/symbols/SimpleLineSymbol",
+                "esri/symbols/TextSymbol"
+            ], function(Point, Polyline, Graphic, SimpleMarkerSymbol, SimpleLineSymbol, TextSymbol) {
+                
+                // Process edges first
+                allEdges.forEach(edge => {
+                    const fromVisible = isNodeVisible(edge.from, allNodes, allEdges);
+                    const toVisible = isNodeVisible(edge.to, allNodes, allEdges);
+                    
+                    if (fromVisible && toVisible) {
+                        const fromNode = allNodes[edge.from];
+                        const toNode = allNodes[edge.to];
+                        
+                        if (fromNode && toNode) {
+                            const polyline = new Polyline({
+                                paths: [[fromNode.coords, toNode.coords]],
+                                spatialReference: { wkid: 4326 }
+                            });
+                            
+                            let color, width, style;
+                            
+                            if (showNetworkView && edge.type === "funding_flow") {
+                                const levelColors = {
+                                    'local': [243, 156, 18, 0.8],
+                                    'regional': [39, 174, 96, 0.8], 
+                                    'statewide': [52, 152, 219, 0.8],
+                                    'national': [155, 89, 182, 0.9]
+                                };
+                                color = levelColors[edge.level] || [149, 165, 166, 0.6];
+                                width = edge.level === 'national' ? 4 : 3;
+                                style = edge.level === 'national' ? "solid" : "solid";
+                            } else if (edge.type === "funding_category") {
+                                color = hexToRgba(edge.color, 0.7);
+                                width = 3;
+                                style = "solid";
+                            } else {
+                                color = [149, 165, 166, 0.6];
+                                width = 2;
+                                style = "dash";
+                            }
+                            
+                            const lineSymbol = new SimpleLineSymbol({
+                                color: color,
+                                width: width,
+                                style: style
+                            });
+                            
+                            const graphic = new Graphic({
+                                geometry: polyline,
+                                symbol: lineSymbol,
+                                attributes: edge
+                            });
+                            
+                            edgeGraphics.push(graphic);
+                        }
+                    }
+                });
+                
+                // Process nodes
+                Object.entries(allNodes).forEach(([nodeId, node]) => {
+                    if (isNodeVisible(nodeId, allNodes, allEdges)) {
+                        const point = new Point({
+                            longitude: node.coords[0],
+                            latitude: node.coords[1],
+                            spatialReference: { wkid: 4326 }
+                        });
+                        
+                        let size = 10;
+                        let color = hexToRgb(node.color || "#999999");
+                        let outline = { color: [255, 255, 255], width: 2 };
+                        
+                        if (node.type === "organization") {
+                            size = 16 + Math.min(node.totalFundingSources, 8);
+                            if (node.isBorder) {
+                                outline = { color: [128, 0, 0], width: 3 };
+                            }
+                        } else if (node.type === "category") {
+                            size = 12 + Math.min(node.sourceCount * 2, 8);
+                        } else if (node.type === "funding_source") {
+                            size = 8;
+                            if (node.fundingLevel === 'national') {
+                                size = 10;
+                                outline = { color: [128, 0, 128], width: 2 };
+                            }
+                        }
+                        
+                        const collapsedChildCount = countCollapsedChildren(nodeId, allNodes, allEdges);
+                        const hasCollapsedChildren = collapsedNodes.has(nodeId) || collapsedChildCount > 0;
+                        
+                        if (hasCollapsedChildren) {
+                            outline = { color: [231, 76, 60], width: 3 };
+                        }
+                        
+                        const markerSymbol = new SimpleMarkerSymbol({
+                            color: color,
+                            size: size,
+                            outline: outline
+                        });
+                        
+                        const graphic = new Graphic({
+                            geometry: point,
+                            symbol: markerSymbol,
+                            attributes: {
+                                ...node,
+                                nodeId: nodeId,
+                                collapsedChildCount: collapsedChildCount
+                            }
+                        });
+                        
+                        nodeGraphics.push(graphic);
+                        
+                        // Add labels for important nodes
+                        if (node.type === "organization" || 
+                            (node.type === "category" && node.connections > 0)) {
+                            let labelText = node.name;
+                            if (node.type === "organization") {
+                                labelText = node.name.length > 25 ? 
+                                    node.name.substring(0, 22) + '...' : node.name;
+                            }
+                            
+                            if (collapsedChildCount > 0) {
+                                labelText += ` (${collapsedChildCount})`;
+                            }
+                            
+                            if (showNetworkView && node.type === "organization") {
+                                labelText += ` [${node.totalFundingSources}]`;
+                            }
+                            
+                            const textSymbol = new TextSymbol({
+                                text: labelText,
+                                color: [0, 0, 0],
+                                haloColor: [255, 255, 255],
+                                haloSize: 2,
+                                font: {
+                                    size: node.type === "organization" ? 11 : 9,
+                                    weight: node.type === "organization" ? "bold" : "normal"
+                                },
+                                yoffset: -18
+                            });
+                            
+                            const labelGraphic = new Graphic({
+                                geometry: point,
+                                symbol: textSymbol
+                            });
+                            
+                            labelGraphics.push(labelGraphic);
+                        }
+                    }
+                });
+                
+                // Add all graphics at once for better performance
+                edgeLayer.addMany(edgeGraphics);
+                nodeLayer.addMany(nodeGraphics);
+                labelLayer.addMany(labelGraphics);
+            });
+        }
+        
+        // Helper function to convert hex to RGB
+        function hexToRgb(hex) {
+            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
+            return result ? [
+                parseInt(result[1], 16),
+                parseInt(result[2], 16),
+                parseInt(result[3], 16)
+            ] : [128, 128, 128];
+        }
+        
+        // Helper function to convert hex to RGBA
+        function hexToRgba(hex, alpha) {
+            const rgb = hexToRgb(hex);
+            return [...rgb, alpha];
+        }
+        
+        // Load and process organization data
+        function loadOrganizationData() {
+            const processedData = orgData.data.map(org => ({
+                name: org['Member Organization'],
+                city: org.City,
+                state: org.State,
+                county: org.County,
+                region: org['State Region'],
+                borderDesignation: org['Border Designation'],
+                censusDivision: org['Census Division'],
+                programSites: org['# of Program Sites'],
+                coordinates: getCoordinates(org.City, org.State),
+                funding: {
+                    local: parseFundingSources(org['Local Funding Sources']),
+                    regional: parseFundingSources(org['Regional Funding Sources']),
+                    statewide: parseFundingSources(org['Statewide Funding Sources']),
+                    national: parseFundingSources(org['National Funding Sources'])
+                }
+            }));
+            
+            return processedData;
+        }
+        
+        // Initialize the map
+        require([
+            "esri/Map",
+            "esri/views/MapView",
+            "esri/layers/GraphicsLayer"
+        ], function(Map, MapView, GraphicsLayer) {
+            
+            // Create map
+            const map = new Map({
+                basemap: "gray-vector"
+            });
+            
+            // Create view
+            networkView = new MapView({
+                container: "viewDiv",
+                map: map,
+                zoom: 4,
+                center: [-98, 39]
+            });
+            
+            // Create graphics layers
+            edgeLayer = new GraphicsLayer({ title: "Funding Flows" });
+            nodeLayer = new GraphicsLayer({ title: "Organizations & Sources" });
+            labelLayer = new GraphicsLayer({ title: "Labels" });
+            
+            map.addMany([edgeLayer, nodeLayer, labelLayer]);
+            
+            networkView.when().then(() => {
+                // Load and process data
+                organizationData = loadOrganizationData();
+                const { nodes, edges } = buildNetworkData(organizationData);
+                
+                allNodes = nodes;
+                allEdges = edges;
+                
+                // Calculate statistics
+                const borderOrgs = organizationData.filter(org => 
+                    org.borderDesignation && org.borderDesignation !== 'N/A'
+                ).length;
+                const nonBorderOrgs = organizationData.length - borderOrgs;
+                
+                let totalSources = 0;
+                let nationalSources = new Set();
+                organizationData.forEach(org => {
+                    totalSources += org.funding.local.length + org.funding.regional.length + 
+                                  org.funding.statewide.length + org.funding.national.length;
+                    org.funding.national.forEach(source => nationalSources.add(source));
+                });
+                
+                // Update UI
+                document.getElementById("borderCount").textContent = borderOrgs;
+                document.getElementById("nonBorderCount").textContent = nonBorderOrgs;
+                document.getElementById("totalSources").textContent = totalSources;
+                document.getElementById("nationalSources").textContent = nationalSources.size;
+                
+                document.getElementById("statsSection").innerHTML = `
+                    <div><strong>${organizationData.length}</strong> Member Organizations</div>
+                    <div><strong>${borderOrgs}</strong> Border Region Organizations</div>
+                    <div><strong>${nonBorderOrgs}</strong> Non-Border Organizations</div>
+                    <div style="margin-top: 8px;">
+                        <strong>${totalSources}</strong> Total Funding Sources
+                    </div>
+                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd;">
+                        <div style="font-size: 12px; color: #007AC2; font-weight: bold;">Funding Distribution:</div>
+                        <div style="font-size: 11px; margin: 2px 0;">
+                            <strong>${nationalSources.size}</strong> unique national funders
+                        </div>
+                        <div style="font-size: 11px; margin: 2px 0;">
+                            Multi-level funding strategy across regions
+                        </div>
+                    </div>
+                `;
+                
+                updateNetworkVisualization();
+                
+                document.getElementById("loadingDiv").style.display = "none";
+                
+                // Handle click events
+                networkView.on("click", function(event) {
+                    networkView.hitTest(event).then(function(response) {
+                        const graphic = response.results[0]?.graphic;
+                        if (graphic && graphic.attributes) {
+                            const attrs = graphic.attributes;
+                            
+                            if (attrs.nodeId && (attrs.type === 'organization' || 
+                                (attrs.type === 'category' && hasChildNodes(attrs.nodeId)))) {
+                                
+                                if (event.native.shiftKey) {
+                                    displayNodeInfo(attrs);
+                                } else {
+                                    const childCount = countDirectChildren(attrs.nodeId);
+                                    if (childCount > 0) {
+                                        window.toggleNodeExpansion(attrs.nodeId);
+                                    } else {
+                                        displayNodeInfo(attrs);
+                                    }
+                                }
+                            } else {
+                                displayNodeInfo(attrs);
+                            }
+                        }
+                    });
+                });
+                
+                // Function to display node information
+                function displayNodeInfo(attrs) {
+                    let infoHtml = "";
+                    
+                    if (attrs.type === "organization") {
+                        const org = attrs.data;
+                        infoHtml = `<h4>🏛️ ${attrs.name}</h4>`;
+                        infoHtml += `<div class="funding-details">`;
+                        infoHtml += `<div><strong>Location:</strong> ${org.city}, ${org.state}</div>`;
+                        infoHtml += `<div><strong>County:</strong> ${org.county}</div>`;
+                        infoHtml += `<div><strong>Region:</strong> ${org.region}</div>`;
+                        infoHtml += `<div><strong>Border Status:</strong> ${org.borderDesignation || 'N/A'}</div>`;
+                        if (org.programSites) {
+                            infoHtml += `<div><strong>Program Sites:</strong> ${org.programSites}</div>`;
+                        }
+                        infoHtml += `</div>`;
+                        
+                        // Add funding breakdown
+                        infoHtml += `<h5>💰 Funding Sources Breakdown:</h5>`;
+                        
+                        const fundingCategories = [
+                            { name: 'Local', sources: org.funding.local, color: '#f39c12' },
+                            { name: 'Regional', sources: org.funding.regional, color: '#27AE60' },
+                            { name: 'Statewide', sources: org.funding.statewide, color: '#3498DB' },
+                            { name: 'National', sources: org.funding.national, color: '#9B59B6' }
+                        ];
+                        
+                        fundingCategories.forEach(category => {
+                            if (category.sources.length > 0) {
+                                infoHtml += `<div class="branch-section" style="border-left-color: ${category.color};">`;
+                                infoHtml += `<div class="branch-title">${category.name} Funding (${category.sources.length})</div>`;
+                                infoHtml += `<div class="tree-structure">`;
+                                category.sources.forEach(source => {
+                                    infoHtml += `<div class="tree-node">${source}</div>`;
+                                });
+                                infoHtml += `</div></div>`;
+                            }
+                        });
+                        
+                    } else if (attrs.type === "category") {
+                        infoHtml = `<h4>📊 ${attrs.name} Funding</h4>`;
+                        infoHtml += `<div class="funding-flow">`;
+                        infoHtml += `<div>${attrs.details}</div>`;
+                        infoHtml += `<div style="margin-top: 5px;">Click to expand/collapse funding sources</div>`;
+                        infoHtml += `</div>`;
+                        
+                    } else if (attrs.type === "funding_source") {
+                        infoHtml = `<h4>💵 ${attrs.name}</h4>`;
+                        infoHtml += `<div class="funding-flow">`;
+                        infoHtml += `<div><strong>Level:</strong> ${attrs.fundingLevel.charAt(0).toUpperCase() + attrs.fundingLevel.slice(1)}</div>`;
+                        infoHtml += `<div><strong>Supporting:</strong> ${attrs.parentOrg}</div>`;
+                        infoHtml += `</div>`;
+                    }
+                    
+                    document.getElementById("nodeInfo").innerHTML = infoHtml || "<p>Click on organizations to view funding networks</p>";
+                    
+                    // Add instruction about clicking nodes
+                    const currentNodeId = attrs.nodeId || attrs.id;
+                    if (currentNodeId && (attrs.type === 'organization' || 
+                        (attrs.type === 'category' && hasChildNodes(currentNodeId)))) {
+                        const childCount = countDirectChildren(currentNodeId);
+                        if (childCount > 0) {
+                            const isCollapsed = collapsedNodes.has(currentNodeId);
+                            const instruction = `<p style="font-size: 12px; color: #666; margin-top: 10px;">
+                                <em>Click node to ${isCollapsed ? 'expand' : 'collapse'} • Shift+Click for info only</em>
+                            </p>`;
+                            document.getElementById("nodeInfo").innerHTML += instruction;
+                        }
+                    }
+                }
+            });
+        });
     </script>
 </body>
 </html>
