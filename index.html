@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Organization Funding Network with Hierarchy</title>
+    <title>Organization Funding Network with Census Divisions</title>
     
     <!-- ArcGIS Maps SDK for JavaScript -->
     <link rel="stylesheet" href="https://js.arcgis.com/4.28/esri/themes/light/main.css">
@@ -55,13 +55,13 @@
             background: #7f8c8d;
         }
         
-        .control-button.toggle-network {
+        .control-button.toggle-map {
             background: #e74c3c;
             font-size: 12px;
             padding: 5px 10px;
         }
         
-        .control-button.toggle-network:hover {
+        .control-button.toggle-map:hover {
             background: #c0392b;
         }
         
@@ -121,19 +121,11 @@
             margin: 5px 0;
         }
         
-        .legend-circle {
-            width: 12px;
-            height: 12px;
-            border-radius: 50%;
-            margin-right: 10px;
-            border: 2px solid white;
-            box-shadow: 0 0 2px rgba(0,0,0,0.3);
-        }
-        
-        .legend-line {
-            width: 30px;
-            height: 3px;
-            margin-right: 10px;
+        .legend-symbol {
+            width: 20px;
+            height: 15px;
+            margin-right: 8px;
+            border: 1px solid #333;
         }
         
         .node-info {
@@ -148,34 +140,6 @@
             margin: 10px 0;
             border-radius: 4px;
             font-size: 13px;
-        }
-        
-        .funding-flow {
-            background: #fff3cd;
-            padding: 10px;
-            margin: 10px 0;
-            border-radius: 4px;
-            border-left: 4px solid #f39c12;
-            font-size: 12px;
-        }
-        
-        .branch-section {
-            margin: 10px 0;
-            padding: 10px;
-            background: #f9f9f9;
-            border-left: 4px solid #007AC2;
-            border-radius: 4px;
-        }
-        
-        .branch-title {
-            font-weight: bold;
-            margin-bottom: 5px;
-        }
-        
-        .branch-details {
-            font-size: 12px;
-            color: #555;
-            margin: 5px 0;
         }
         
         .stats-section {
@@ -198,64 +162,99 @@
             box-shadow: 0 2px 10px rgba(0,0,0,0.2);
         }
         
-        .funding-pulse {
-            animation: fundingPulse 3s infinite;
+        .mapToggle {
+            position: absolute;
+            top: 20px;
+            left: 20px;
+            z-index: 100;
+            display: flex;
+            background: rgba(255, 255, 255, 0.95);
+            border-radius: 8px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.2);
+            overflow: hidden;
         }
         
-        @keyframes fundingPulse {
-            0%, 100% { opacity: 0.6; }
-            50% { opacity: 1.0; }
+        .toggle-button {
+            padding: 10px 20px;
+            border: none;
+            background: white;
+            cursor: pointer;
+            font-family: Arial, sans-serif;
+            font-size: 14px;
+            font-weight: bold;
+            transition: background-color 0.3s;
         }
         
-        .high-funding-node {
-            animation: highlightPulse 2s infinite;
+        .toggle-button:hover {
+            background-color: #f0f0f0;
         }
         
-        @keyframes highlightPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
+        .toggle-button.active {
+            background-color: #007ac2;
+            color: white;
         }
         
-        .tree-structure {
-            margin-left: 15px;
-            border-left: 2px solid #ddd;
-            padding-left: 10px;
-        }
-        
-        .tree-node {
-            margin: 5px 0;
-            position: relative;
+        .color-pacific { background-color: rgba(231, 76, 60, 0.7); }
+        .color-mountain { background-color: rgba(243, 156, 18, 0.7); }
+        .color-west-south-central { background-color: rgba(52, 152, 219, 0.7); }
+        .color-south-atlantic { background-color: rgba(46, 204, 113, 0.7); }
+        .color-middle-atlantic { background-color: rgba(155, 89, 182, 0.7); }
+        .color-east-north-central { background-color: rgba(255, 193, 7, 0.7); }
+        .color-other { background-color: rgba(200, 200, 200, 0.3); }
+
+        #tooltip {
+            position: absolute;
+            background: rgba(0, 0, 0, 0.8);
+            color: white;
+            padding: 8px 12px;
+            border-radius: 4px;
+            font-size: 14px;
+            pointer-events: none;
+            z-index: 1000;
+            display: none;
         }
     </style>
     <script src="https://js.arcgis.com/4.28/"></script>
 </head>
 <body>
+    <div id="viewDiv"></div>
+    <div id="tooltip"></div>
+    
+    <div id="loadingDiv">
+        <h3>Loading Funding Network...</h3>
+        <p>Processing organization and census division data</p>
+    </div>
+    
+    <div class="mapToggle">
+        <button class="toggle-button active" id="censusDivBtn">Census Divisions</button>
+        <button class="toggle-button" id="organizationBtn">Organization Network</button>
+    </div>
+    
     <div id="controlPanel">
         <button class="control-button" onclick="resetView()">Reset View</button>
-        <button class="control-button secondary" onclick="expandAll()">Expand All Networks</button>
-        <button class="control-button secondary" onclick="collapseAll()">Collapse All</button>
-        <button class="control-button toggle-network" onclick="toggleNetworkView()">Toggle Network View</button>
+        <button class="control-button secondary" onclick="toggleDetails()">Toggle Details</button>
         <div style="margin-top: 10px; padding-top: 10px; border-top: 1px solid #ddd;">
             <small style="color: #666;">
-                <strong>Click</strong> organization to expand funding network<br>
-                <strong>Shift+Click</strong> for details only
+                <strong>Click</strong> states/organizations for details<br>
+                <strong>Hover</strong> for quick info
             </small>
         </div>
     </div>
     
-    <div id="viewDiv"></div>
-    
-    <div id="loadingDiv">
-        <h3>Loading Funding Network...</h3>
-        <p>Processing organization and funding data</p>
-    </div>
-    
     <div id="infoPanel">
-        <h3>🏛️ Organization Funding Network</h3>
-        <p><strong>18 Member Organizations</strong> - Funding Source Analysis</p>
+        <h3>🏛️ Organization Funding Network by Census Division</h3>
+        <p><strong>18 Member Organizations</strong> across U.S. Census Divisions</p>
         
         <div class="funding-overview">
-            <h4>💰 Funding Distribution</h4>
+            <h4>🗺️ Geographic Distribution</h4>
+            <div class="funding-metric">
+                <span>Census Divisions Represented:</span>
+                <strong id="censusDivisionCount">-</strong>
+            </div>
+            <div class="funding-metric">
+                <span>States with Organizations:</span>
+                <strong id="stateCount">-</strong>
+            </div>
             <div class="funding-metric">
                 <span>Border Organizations:</span>
                 <strong id="borderCount">-</strong>
@@ -264,17 +263,6 @@
                 <span>Non-Border Organizations:</span>
                 <strong id="nonBorderCount">-</strong>
             </div>
-            <div class="funding-metric">
-                <span>Total Funding Sources:</span>
-                <strong id="totalSources">-</strong>
-            </div>
-            <div class="funding-metric">
-                <span>National Sources:</span>
-                <strong id="nationalSources">-</strong>
-            </div>
-            <div style="margin-top: 10px; font-size: 11px; color: #636e72;">
-                <em>Funding flows from local to national levels across diverse geographic regions</em>
-            </div>
         </div>
         
         <div class="stats-section" id="statsSection">
@@ -282,72 +270,54 @@
         </div>
         
         <div class="legend">
-            <h4>Organization Types</h4>
+            <h4>Census Divisions</h4>
             <div class="legend-item">
-                <div class="legend-circle" style="background: #FF6B6B;"></div>
-                <span>Border Region Organizations</span>
+                <div class="legend-symbol color-pacific"></div>
+                <span>Pacific Division</span>
             </div>
             <div class="legend-item">
-                <div class="legend-circle" style="background: #4ECDC4;"></div>
-                <span>Non-Border Organizations</span>
+                <div class="legend-symbol color-mountain"></div>
+                <span>Mountain Division</span>
             </div>
             <div class="legend-item">
-                <div class="legend-circle" style="background: #f39c12;"></div>
-                <span>Local Funding Source</span>
+                <div class="legend-symbol color-west-south-central"></div>
+                <span>West South Central</span>
             </div>
             <div class="legend-item">
-                <div class="legend-circle" style="background: #27AE60;"></div>
-                <span>Regional Funding Source</span>
+                <div class="legend-symbol color-south-atlantic"></div>
+                <span>South Atlantic</span>
             </div>
             <div class="legend-item">
-                <div class="legend-circle" style="background: #3498DB;"></div>
-                <span>Statewide Funding Source</span>
+                <div class="legend-symbol color-middle-atlantic"></div>
+                <span>Middle Atlantic</span>
             </div>
             <div class="legend-item">
-                <div class="legend-circle" style="background: #9B59B6;"></div>
-                <span>National Funding Source</span>
-            </div>
-        </div>
-        
-        <div class="legend">
-            <h4>Funding Flow Types</h4>
-            <div class="legend-item">
-                <div class="legend-line" style="background: #f39c12; width: 4px;"></div>
-                <span>Local Funding Flow</span>
+                <div class="legend-symbol color-east-north-central"></div>
+                <span>East North Central</span>
             </div>
             <div class="legend-item">
-                <div class="legend-line" style="background: #27AE60; width: 4px;"></div>
-                <span>Regional Funding Flow</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-line" style="background: #3498DB; width: 4px;"></div>
-                <span>Statewide Funding Flow</span>
-            </div>
-            <div class="legend-item">
-                <div class="legend-line" style="background: linear-gradient(90deg, #9B59B6, #8E44AD); width: 4px; animation: fundingPulse 3s infinite;"></div>
-                <span>National Funding Flow</span>
+                <div class="legend-symbol color-other"></div>
+                <span>Other States</span>
             </div>
         </div>
         
         <div class="node-info" id="nodeInfo">
-            <p>Click on organizations to view funding networks</p>
+            <p>Click on states or organizations to view details</p>
         </div>
     </div>
 
     <script>
-        // Global variables for visualization
-        let networkView = null;
-        let collapsedNodes = new Set();
-        let allNodes = {};
-        let allEdges = [];
-        let nodeLayer = null;
-        let edgeLayer = null;
-        let labelLayer = null;
-        let showNetworkView = true;
+        // Global variables
+        let mapView = null;
+        let statesLayer = null;
+        let organizationsLayer = null;
+        let labelsLayer = null;
+        let currentMap = 'census';
         let organizationData = [];
-        let renderTimeout = null;
+        let censusDivisionCounts = {};
+        let showDetails = true;
         
-        // Organization data
+        // Organization data embedded
         const orgData = {
             "data": [
                 {
@@ -604,10 +574,44 @@
                 }
               ]
         };
-        
-        // Function to get coordinates for cities with anti-overlap positioning
-        function getCoordinates(city, state, organizationIndex = 0, totalInCity = 1) {
-            const baseCoordinates = {
+
+        // Census division mapping based on organization data
+        const censusDivisionMapping = {
+            'Pacific Division': {
+                states: ['CA', 'OR', 'WA'],
+                color: [231, 76, 60, 0.7], // Red
+                displayName: 'Pacific Division'
+            },
+            'Mountain Division': {
+                states: ['AZ', 'NM'],
+                color: [243, 156, 18, 0.7], // Orange
+                displayName: 'Mountain Division'
+            },
+            'West South Central Division': {
+                states: ['TX'],
+                color: [52, 152, 219, 0.7], // Blue
+                displayName: 'West South Central'
+            },
+            'South Atlantic Division': {
+                states: ['FL', 'DC', 'NC', 'MD'],
+                color: [46, 204, 113, 0.7], // Green
+                displayName: 'South Atlantic'
+            },
+            'Middle Atlantic Division': {
+                states: ['NY'],
+                color: [155, 89, 182, 0.7], // Purple
+                displayName: 'Middle Atlantic'
+            },
+            'East North Central Division': {
+                states: ['IN'],
+                color: [255, 193, 7, 0.7], // Yellow
+                displayName: 'East North Central'
+            }
+        };
+
+        // Function to get coordinates for cities
+        function getCoordinates(city, state) {
+            const coordinates = {
                 'Oxnard, CA': [-119.1771, 34.1975],
                 'Yuma, AZ': [-114.6276, 32.6927],
                 'El Paso, TX': [-106.4850, 31.7619],
@@ -626,499 +630,210 @@
                 'Baltimore, MD': [-76.6122, 39.2904]
             };
             
-            const key = `${city}, ${state}`;
-            const baseCoords = baseCoordinates[key] || [-98, 39];
-            
-            // If only one organization in this city, return base coordinates
-            if (totalInCity === 1) {
-                return baseCoords;
-            }
-            
-            // Calculate offset for multiple organizations in same city
-            // Use a circular pattern around the base coordinates
-            const radius = 0.08; // Degrees of separation (roughly 5-6 miles)
-            const angle = (organizationIndex / totalInCity) * 2 * Math.PI;
-            
-            // Apply offset
-            const offsetCoords = [
-                baseCoords[0] + (radius * Math.cos(angle)),
-                baseCoords[1] + (radius * Math.sin(angle))
-            ];
-            
-            return offsetCoords;
+            return coordinates[`${city}, ${state}`] || [-98, 39];
         }
-        
-        // Function to count organizations per city
-        function countOrganizationsPerCity(organizations) {
-            const cityCount = {};
-            organizations.forEach(org => {
-                const key = `${org.city}, ${org.state}`;
-                cityCount[key] = (cityCount[key] || 0) + 1;
-            });
-            return cityCount;
-        }
-        
-        // Function to get organization index within city
-        function getOrganizationIndexInCity(organizations, currentOrgIndex) {
-            const currentOrg = organizations[currentOrgIndex];
-            const currentCityKey = `${currentOrg.city}, ${currentOrg.state}`;
-            
-            let indexInCity = 0;
-            for (let i = 0; i < currentOrgIndex; i++) {
-                const org = organizations[i];
-                const cityKey = `${org.city}, ${org.state}`;
-                if (cityKey === currentCityKey) {
-                    indexInCity++;
-                }
-            }
-            
-            return indexInCity;
-        }
-        
-        // Function to parse funding sources from string
+
+        // Function to parse funding sources
         function parseFundingSources(sourcesString) {
             if (!sourcesString || sourcesString.trim() === '') {
                 return [];
             }
             return sourcesString.split(',').map(source => source.trim()).filter(source => source !== '');
         }
-        
-        // Function to toggle network view
-        window.toggleNetworkView = function() {
-            showNetworkView = !showNetworkView;
-            debouncedUpdateVisualization();
+
+        // Function to get census division from string
+        function getCensusDivision(censusDivisionString) {
+            if (censusDivisionString.includes('Pacific Division')) return 'Pacific Division';
+            if (censusDivisionString.includes('Mountain Division')) return 'Mountain Division';
+            if (censusDivisionString.includes('West South Central')) return 'West South Central Division';
+            if (censusDivisionString.includes('South Atlantic')) return 'South Atlantic Division';
+            if (censusDivisionString.includes('Middle Atlantic')) return 'Middle Atlantic Division';
+            if (censusDivisionString.includes('East North Central')) return 'East North Central Division';
+            return 'Other';
         }
-        
-        // Function to reset view
-        window.resetView = function() {
-            collapsedNodes.clear();
-            networkView.goTo({
-                center: [-98, 39],
-                zoom: 4
-            });
+
+        // Function to get state abbreviation from full name
+        function getStateAbbreviation(stateName) {
+            const stateMap = {
+                'California': 'CA',
+                'Arizona': 'AZ',
+                'Texas': 'TX',
+                'Florida': 'FL',
+                'District of Columbia': 'DC',
+                'New Mexico': 'NM',
+                'New York': 'NY',
+                'Oregon': 'OR',
+                'North Carolina': 'NC',
+                'Indiana': 'IN',
+                'Washington': 'WA',
+                'Maryland': 'MD'
+            };
+            return stateMap[stateName] || stateName;
         }
-        
-        // Function to expand all nodes
-        window.expandAll = function() {
-            collapsedNodes.clear();
-            debouncedUpdateVisualization();
-        }
-        
-        // Function to collapse all nodes
-        window.collapseAll = function() {
-            Object.entries(allNodes).forEach(([nodeId, node]) => {
-                if (node.type === 'organization') {
-                    collapsedNodes.add(nodeId);
-                }
-            });
-            debouncedUpdateVisualization();
-        }
-        
-        // Function to toggle node expansion
-        window.toggleNodeExpansion = function(nodeId) {
-            if (collapsedNodes.has(nodeId)) {
-                collapsedNodes.delete(nodeId);
-            } else {
-                collapsedNodes.add(nodeId);
-            }
-            debouncedUpdateVisualization();
-        }
-        
-        // Debounced update function
-        function debouncedUpdateVisualization() {
-            if (renderTimeout) {
-                clearTimeout(renderTimeout);
-            }
-            renderTimeout = setTimeout(() => {
-                updateNetworkVisualization();
-            }, 100);
-        }
-        
-        // Function to check if a node should be visible
-        function isNodeVisible(nodeId, nodes, edges) {
-            const node = nodes[nodeId];
-            if (!node) return false;
+
+        // Function to get fill color based on census division
+        function getFillSymbol(stateName, organizationCount = 0) {
+            const stateAbbrev = getStateAbbreviation(stateName);
+            let color = [200, 200, 200, 0.3]; // Default gray for states without organizations
             
-            if (node.type === 'organization') return true;
-            
-            const ancestors = getNodeAncestors(nodeId, edges);
-            for (const ancestorId of ancestors) {
-                if (collapsedNodes.has(ancestorId)) {
-                    return false;
-                }
-            }
-            
-            return true;
-        }
-        
-        // Function to get all ancestors of a node
-        function getNodeAncestors(nodeId, edges) {
-            const ancestors = [];
-            let currentId = nodeId;
-            
-            while (currentId) {
-                const parentEdge = edges.find(e => e.to === currentId);
-                if (parentEdge) {
-                    ancestors.push(parentEdge.from);
-                    currentId = parentEdge.from;
-                } else {
+            // Find which census division this state belongs to
+            for (const [divisionName, division] of Object.entries(censusDivisionMapping)) {
+                if (division.states.includes(stateAbbrev)) {
+                    color = division.color;
                     break;
                 }
             }
             
-            return ancestors;
-        }
-        
-        // Function to check if a node has children
-        function hasChildNodes(nodeId) {
-            return allEdges.some(edge => edge.from === nodeId);
-        }
-        
-        // Function to count direct children of a node
-        function countDirectChildren(nodeId) {
-            return allEdges.filter(edge => edge.from === nodeId).length;
-        }
-        
-        // Function to count collapsed children
-        function countCollapsedChildren(nodeId, nodes, edges) {
-            let count = 0;
-            const children = edges.filter(e => e.from === nodeId).map(e => e.to);
+            // Adjust opacity based on organization count
+            if (organizationCount > 0) {
+                color[3] = Math.min(0.4 + (organizationCount * 0.2), 0.9);
+            }
             
-            children.forEach(childId => {
-                if (!isNodeVisible(childId, nodes, edges)) {
-                    count++;
+            return {
+                type: "simple-fill",
+                color: color,
+                outline: {
+                    color: [255, 255, 255],
+                    width: organizationCount > 0 ? 2 : 1
                 }
-                count += countCollapsedChildren(childId, nodes, edges);
-            });
-            
-            return count;
+            };
         }
-        
-        // Build network data structure with funding awareness and anti-overlap positioning
-        function buildNetworkData(organizations) {
-            const nodes = {};
-            const edges = [];
-            let nodeIdCounter = 0;
+
+        // Function to switch between maps
+        function switchMap(mapType) {
+            currentMap = mapType;
             
-            // First, count organizations per city to handle overlaps
-            const cityCount = countOrganizationsPerCity(organizations);
+            // Update button states
+            document.getElementById('censusDivBtn').classList.toggle('active', mapType === 'census');
+            document.getElementById('organizationBtn').classList.toggle('active', mapType === 'organization');
             
-            // Process each organization
-            organizations.forEach((org, orgIndex) => {
-                const orgId = `org_${orgIndex}`;
-                
-                // Get coordinates with anti-overlap positioning
-                const cityKey = `${org.city}, ${org.state}`;
-                const organizationsInThisCity = cityCount[cityKey];
-                const organizationIndexInCity = getOrganizationIndexInCity(organizations, orgIndex);
-                const coordinates = getCoordinates(org.city, org.state, organizationIndexInCity, organizationsInThisCity);
-                
-                const isBorder = org.borderDesignation && org.borderDesignation !== 'N/A';
-                
-                // Create organization node
-                nodes[orgId] = {
-                    id: orgId,
-                    name: org.name,
-                    type: 'organization',
-                    color: isBorder ? '#FF6B6B' : '#4ECDC4',
-                    details: `${org.city}, ${org.state} - ${org.county}`,
-                    coords: coordinates,
-                    data: org,
-                    connections: 0,
-                    isBorder: isBorder,
-                    totalFundingSources: org.funding.local.length + org.funding.regional.length + 
-                                       org.funding.statewide.length + org.funding.national.length,
-                    cityKey: cityKey,
-                    organizationsInCity: organizationsInThisCity
-                };
-                
-                // Process funding categories
-                const fundingCategories = [
-                    { name: 'Local', sources: org.funding.local, color: '#f39c12' },
-                    { name: 'Regional', sources: org.funding.regional, color: '#27AE60' },
-                    { name: 'Statewide', sources: org.funding.statewide, color: '#3498DB' },
-                    { name: 'National', sources: org.funding.national, color: '#9B59B6' }
-                ];
-                
-                fundingCategories.forEach((category, catIndex) => {
-                    if (category.sources.length > 0) {
-                        const catId = `${orgId}_cat_${catIndex}`;
-                        
-                        // Create category node positioned around organization with larger radius to avoid overlap
-                        const categoryRadius = organizationsInThisCity > 1 ? 0.7 : 0.5; // Larger radius for cities with multiple orgs
-                        const catCoords = [
-                            coordinates[0] + (Math.cos((catIndex * 90) * Math.PI / 180) * categoryRadius),
-                            coordinates[1] + (Math.sin((catIndex * 90) * Math.PI / 180) * categoryRadius)
-                        ];
-                        
-                        nodes[catId] = {
-                            id: catId,
-                            name: category.name,
-                            type: 'category',
-                            color: category.color,
-                            details: `${category.sources.length} funding sources`,
-                            coords: catCoords,
-                            connections: 0,
-                            fundingLevel: category.name.toLowerCase(),
-                            sourceCount: category.sources.length,
-                            parentOrgCity: cityKey
-                        };
-                        
-                        // Create edge from organization to category
-                        edges.push({
-                            from: orgId,
-                            to: catId,
-                            type: 'funding_category',
-                            color: category.color,
-                            level: category.name.toLowerCase()
-                        });
-                        
-                        // Process individual funding sources
-                        category.sources.forEach((source, sourceIndex) => {
-                            const sourceId = `${catId}_source_${sourceIndex}`;
-                            
-                            // Create source node positioned around category with adaptive radius
-                            const angle = (sourceIndex / category.sources.length) * 2 * Math.PI;
-                            const sourceRadius = organizationsInThisCity > 1 ? 0.4 : 0.3; // Adaptive radius
-                            const sourceCoords = [
-                                catCoords[0] + (Math.cos(angle) * sourceRadius),
-                                catCoords[1] + (Math.sin(angle) * sourceRadius)
-                            ];
-                            
-                            nodes[sourceId] = {
-                                id: sourceId,
-                                name: source,
-                                type: 'funding_source',
-                                color: category.color,
-                                details: `${category.name} funding source`,
-                                coords: sourceCoords,
-                                connections: 0,
-                                fundingLevel: category.name.toLowerCase(),
-                                parentOrg: org.name,
-                                parentOrgCity: cityKey
-                            };
-                            
-                            // Create edge from category to source
-                            edges.push({
-                                from: catId,
-                                to: sourceId,
-                                type: 'funding_flow',
-                                color: category.color,
-                                level: category.name.toLowerCase()
-                            });
-                        });
-                    }
+            // Update layer visibility
+            statesLayer.visible = (mapType === 'census');
+            organizationsLayer.visible = (mapType === 'organization');
+            
+            // Clear labels and recreate for current map
+            labelsLayer.removeAll();
+            createLabels(mapType);
+            
+            // Adjust view
+            if (mapType === 'census') {
+                mapView.goTo({
+                    center: [-98, 39],
+                    zoom: 4
                 });
-            });
-            
-            // Update connection counts
-            edges.forEach(edge => {
-                if (nodes[edge.from]) nodes[edge.from].connections++;
-                if (nodes[edge.to]) nodes[edge.to].connections++;
-            });
-            
-            return { nodes, edges };
+            } else {
+                mapView.goTo({
+                    center: [-98, 39],
+                    zoom: 4
+                });
+            }
         }
-        
-        // Function to update network visualization
-        function updateNetworkVisualization() {
-            if (!networkView || !nodeLayer || !edgeLayer || !labelLayer) return;
-            
-            // Clear all layers
-            nodeLayer.removeAll();
-            edgeLayer.removeAll();
-            labelLayer.removeAll();
-            
-            // Batch graphics for better performance
-            const nodeGraphics = [];
-            const edgeGraphics = [];
-            const labelGraphics = [];
+
+        // Function to create labels for the current map
+        function createLabels(mapType) {
+            if (!mapView) return;
             
             require([
                 "esri/geometry/Point",
-                "esri/geometry/Polyline", 
                 "esri/Graphic",
-                "esri/symbols/SimpleMarkerSymbol",
-                "esri/symbols/SimpleLineSymbol",
                 "esri/symbols/TextSymbol"
-            ], function(Point, Polyline, Graphic, SimpleMarkerSymbol, SimpleLineSymbol, TextSymbol) {
+            ], function(Point, Graphic, TextSymbol) {
                 
-                // Process edges first
-                allEdges.forEach(edge => {
-                    const fromVisible = isNodeVisible(edge.from, allNodes, allEdges);
-                    const toVisible = isNodeVisible(edge.to, allNodes, allEdges);
-                    
-                    if (fromVisible && toVisible) {
-                        const fromNode = allNodes[edge.from];
-                        const toNode = allNodes[edge.to];
-                        
-                        if (fromNode && toNode) {
-                            const polyline = new Polyline({
-                                paths: [[fromNode.coords, toNode.coords]],
-                                spatialReference: { wkid: 4326 }
+                if (mapType === 'census') {
+                    // Add labels for census divisions
+                    const divisionCenters = {
+                        'Pacific Division': { lat: 43.0, lon: -120.0 },
+                        'Mountain Division': { lat: 34.0, lon: -108.0 },
+                        'West South Central Division': { lat: 31.5, lon: -99.0 },
+                        'South Atlantic Division': { lat: 33.0, lon: -81.0 },
+                        'Middle Atlantic Division': { lat: 43.0, lon: -77.0 },
+                        'East North Central Division': { lat: 40.5, lon: -86.5 }
+                    };
+
+                    Object.entries(censusDivisionCounts).forEach(([divisionName, count]) => {
+                        if (count > 0 && divisionCenters[divisionName]) {
+                            const center = divisionCenters[divisionName];
+                            const point = new Point({
+                                longitude: center.lon,
+                                latitude: center.lat
                             });
-                            
-                            let color, width, style;
-                            
-                            if (showNetworkView && edge.type === "funding_flow") {
-                                const levelColors = {
-                                    'local': [243, 156, 18, 0.8],
-                                    'regional': [39, 174, 96, 0.8], 
-                                    'statewide': [52, 152, 219, 0.8],
-                                    'national': [155, 89, 182, 0.9]
-                                };
-                                color = levelColors[edge.level] || [149, 165, 166, 0.6];
-                                width = edge.level === 'national' ? 4 : 3;
-                                style = edge.level === 'national' ? "solid" : "solid";
-                            } else if (edge.type === "funding_category") {
-                                color = hexToRgba(edge.color, 0.7);
-                                width = 3;
-                                style = "solid";
-                            } else {
-                                color = [149, 165, 166, 0.6];
-                                width = 2;
-                                style = "dash";
-                            }
-                            
-                            const lineSymbol = new SimpleLineSymbol({
-                                color: color,
-                                width: width,
-                                style: style
-                            });
-                            
-                            const graphic = new Graphic({
-                                geometry: polyline,
-                                symbol: lineSymbol,
-                                attributes: edge
-                            });
-                            
-                            edgeGraphics.push(graphic);
-                        }
-                    }
-                });
-                
-                // Process nodes
-                Object.entries(allNodes).forEach(([nodeId, node]) => {
-                    if (isNodeVisible(nodeId, allNodes, allEdges)) {
-                        const point = new Point({
-                            longitude: node.coords[0],
-                            latitude: node.coords[1],
-                            spatialReference: { wkid: 4326 }
-                        });
-                        
-                        let size = 10;
-                        let color = hexToRgb(node.color || "#999999");
-                        let outline = { color: [255, 255, 255], width: 2 };
-                        
-                        if (node.type === "organization") {
-                            size = 16 + Math.min(node.totalFundingSources, 8);
-                            if (node.isBorder) {
-                                outline = { color: [128, 0, 0], width: 3 };
-                            }
-                        } else if (node.type === "category") {
-                            size = 12 + Math.min(node.sourceCount * 2, 8);
-                        } else if (node.type === "funding_source") {
-                            size = 8;
-                            if (node.fundingLevel === 'national') {
-                                size = 10;
-                                outline = { color: [128, 0, 128], width: 2 };
-                            }
-                        }
-                        
-                        const collapsedChildCount = countCollapsedChildren(nodeId, allNodes, allEdges);
-                        const hasCollapsedChildren = collapsedNodes.has(nodeId) || collapsedChildCount > 0;
-                        
-                        if (hasCollapsedChildren) {
-                            outline = { color: [231, 76, 60], width: 3 };
-                        }
-                        
-                        const markerSymbol = new SimpleMarkerSymbol({
-                            color: color,
-                            size: size,
-                            outline: outline
-                        });
-                        
-                        const graphic = new Graphic({
-                            geometry: point,
-                            symbol: markerSymbol,
-                            attributes: {
-                                ...node,
-                                nodeId: nodeId,
-                                collapsedChildCount: collapsedChildCount
-                            }
-                        });
-                        
-                        nodeGraphics.push(graphic);
-                        
-                        // Add labels for important nodes with city overlap indicators
-                        if (node.type === "organization" || 
-                            (node.type === "category" && node.connections > 0)) {
-                            let labelText = node.name;
-                            if (node.type === "organization") {
-                                labelText = node.name.length > 25 ? 
-                                    node.name.substring(0, 22) + '...' : node.name;
-                                
-                                // Add city indicator for overlapping organizations
-                                if (node.organizationsInCity > 1) {
-                                    const orgNumber = organizationData.findIndex(org => org.name === node.name) + 1;
-                                    labelText += ` (#${orgNumber})`;
-                                }
-                            }
-                            
-                            if (collapsedChildCount > 0) {
-                                labelText += ` (${collapsedChildCount})`;
-                            }
-                            
-                            if (showNetworkView && node.type === "organization") {
-                                labelText += ` [${node.totalFundingSources}]`;
-                            }
-                            
-                            const textSymbol = new TextSymbol({
-                                text: labelText,
-                                color: [0, 0, 0],
-                                haloColor: [255, 255, 255],
-                                haloSize: 2,
-                                font: {
-                                    size: node.type === "organization" ? 11 : 9,
-                                    weight: node.type === "organization" ? "bold" : "normal"
-                                },
-                                yoffset: -18
-                            });
-                            
+
+                            const division = censusDivisionMapping[divisionName];
+                            const labelText = `${division.displayName}\n${count} ${count === 1 ? 'organization' : 'organizations'}`;
+
                             const labelGraphic = new Graphic({
                                 geometry: point,
-                                symbol: textSymbol
+                                symbol: {
+                                    type: "text",
+                                    color: [0, 0, 0],
+                                    haloColor: [255, 255, 255],
+                                    haloSize: "2px",
+                                    text: labelText,
+                                    font: {
+                                        size: "14px",
+                                        family: "Arial",
+                                        weight: "bold"
+                                    }
+                                }
                             });
-                            
-                            labelGraphics.push(labelGraphic);
+
+                            labelsLayer.add(labelGraphic);
                         }
-                    }
-                });
-                
-                // Add all graphics at once for better performance
-                edgeLayer.addMany(edgeGraphics);
-                nodeLayer.addMany(nodeGraphics);
-                labelLayer.addMany(labelGraphics);
+                    });
+                } else {
+                    // Add labels for organizations
+                    organizationData.forEach(org => {
+                        const coords = getCoordinates(org.city, org.state);
+                        const point = new Point({
+                            longitude: coords[0],
+                            latitude: coords[1]
+                        });
+
+                        const totalFunding = org.funding.local.length + org.funding.regional.length + 
+                                           org.funding.statewide.length + org.funding.national.length;
+                        
+                        let orgName = org.name.length > 25 ? org.name.substring(0, 22) + '...' : org.name;
+                        if (showDetails) {
+                            orgName += `\n[${totalFunding} sources]`;
+                        }
+
+                        const labelGraphic = new Graphic({
+                            geometry: point,
+                            symbol: {
+                                type: "text",
+                                color: [0, 0, 0],
+                                haloColor: [255, 255, 255],
+                                haloSize: "2px",
+                                text: orgName,
+                                font: {
+                                    size: "11px",
+                                    family: "Arial",
+                                    weight: "bold"
+                                },
+                                yoffset: -18
+                            }
+                        });
+
+                        labelsLayer.add(labelGraphic);
+                    });
+                }
             });
         }
-        
-        // Helper function to convert hex to RGB
-        function hexToRgb(hex) {
-            const result = /^#?([a-f\d]{2})([a-f\d]{2})([a-f\d]{2})$/i.exec(hex);
-            return result ? [
-                parseInt(result[1], 16),
-                parseInt(result[2], 16),
-                parseInt(result[3], 16)
-            ] : [128, 128, 128];
+
+        // Global functions
+        window.resetView = function() {
+            mapView.goTo({
+                center: [-98, 39],
+                zoom: 4
+            });
         }
-        
-        // Helper function to convert hex to RGBA
-        function hexToRgba(hex, alpha) {
-            const rgb = hexToRgb(hex);
-            return [...rgb, alpha];
+
+        window.toggleDetails = function() {
+            showDetails = !showDetails;
+            createLabels(currentMap);
         }
-        
-        // Load and process organization data with overlap detection
+
+        // Load and process organization data
         function loadOrganizationData() {
             const processedData = orgData.data.map(org => ({
                 name: org['Member Organization'],
@@ -1127,7 +842,7 @@
                 county: org.County,
                 region: org['State Region'],
                 borderDesignation: org['Border Designation'],
-                censusDivision: org['Census Division'],
+                censusDivision: getCensusDivision(org['Census Division']),
                 programSites: org['# of Program Sites'],
                 funding: {
                     local: parseFundingSources(org['Local Funding Sources']),
@@ -1137,26 +852,225 @@
                 }
             }));
             
-            // Debug: Log cities with multiple organizations
-            const cityGroups = {};
-            processedData.forEach((org, index) => {
-                const key = `${org.city}, ${org.state}`;
-                if (!cityGroups[key]) {
-                    cityGroups[key] = [];
-                }
-                cityGroups[key].push({ name: org.name, index });
-            });
-            
-            // Log cities with overlaps
-            Object.entries(cityGroups).forEach(([city, orgs]) => {
-                if (orgs.length > 1) {
-                    console.log(`🏛️ ${city} has ${orgs.length} organizations:`, orgs.map(o => o.name));
-                }
-            });
-            
             return processedData;
         }
-        
+
+        // Count organizations by census division
+        function countByCensusDivision(organizations) {
+            const counts = {};
+            organizations.forEach(org => {
+                const division = org.censusDivision;
+                counts[division] = (counts[division] || 0) + 1;
+            });
+            return counts;
+        }
+
+        // Count organizations by state
+        function countByState(organizations) {
+            const counts = {};
+            organizations.forEach(org => {
+                counts[org.state] = (counts[org.state] || 0) + 1;
+            });
+            return counts;
+        }
+
+        // Load map data and create visualization
+        async function loadMapData() {
+            try {
+                // Load organization data
+                organizationData = loadOrganizationData();
+                censusDivisionCounts = countByCensusDivision(organizationData);
+                const stateCounts = countByState(organizationData);
+                
+                // Load US states JSON
+                const statesResponse = await fetch('https://raw.githubusercontent.com/pluricalifornia/alianzanacionalfunding/main/data/US_STATES.json');
+                const statesData = await statesResponse.json();
+
+                require([
+                    "esri/geometry/Polygon",
+                    "esri/Graphic",
+                    "esri/PopupTemplate",
+                    "esri/geometry/Point",
+                    "esri/symbols/SimpleMarkerSymbol"
+                ], function(Polygon, Graphic, PopupTemplate, Point, SimpleMarkerSymbol) {
+                    
+                    // Create census division states map
+                    statesData.features.forEach(feature => {
+                        const stateName = feature.properties.name;
+                        const stateAbbrev = getStateAbbreviation(stateName);
+                        const organizationCount = stateCounts[stateAbbrev] || 0;
+                        
+                        let polygon;
+                        if (feature.geometry.type === "Polygon") {
+                            const rings = feature.geometry.coordinates.map(ring => 
+                                ring.map(coord => [coord[0], coord[1]])
+                            );
+                            polygon = new Polygon({
+                                rings: rings,
+                                spatialReference: { wkid: 4326 }
+                            });
+                        } else if (feature.geometry.type === "MultiPolygon") {
+                            const allRings = [];
+                            feature.geometry.coordinates.forEach(polygonCoords => {
+                                polygonCoords.forEach(ring => {
+                                    allRings.push(ring.map(coord => [coord[0], coord[1]]));
+                                });
+                            });
+                            polygon = new Polygon({
+                                rings: allRings,
+                                spatialReference: { wkid: 4326 }
+                            });
+                        }
+
+                        // Find census division for this state
+                        let censusDivision = 'Other';
+                        let divisionDisplayName = 'Other';
+                        for (const [divisionName, division] of Object.entries(censusDivisionMapping)) {
+                            if (division.states.includes(stateAbbrev)) {
+                                censusDivision = divisionName;
+                                divisionDisplayName = division.displayName;
+                                break;
+                            }
+                        }
+
+                        const popupTemplate = new PopupTemplate({
+                            title: `${stateName}`,
+                            content: `
+                                <div style="padding: 10px;">
+                                    <p><strong>State:</strong> ${stateName}</p>
+                                    <p><strong>Census Division:</strong> ${divisionDisplayName}</p>
+                                    <p><strong>Organizations:</strong> ${organizationCount}</p>
+                                    <p><strong>Percentage:</strong> ${((organizationCount / organizationData.length) * 100).toFixed(1)}% of total</p>
+                                </div>
+                            `
+                        });
+
+                        const graphic = new Graphic({
+                            geometry: polygon,
+                            symbol: getFillSymbol(stateName, organizationCount),
+                            popupTemplate: popupTemplate,
+                            attributes: {
+                                name: stateName,
+                                state: stateAbbrev,
+                                censusDivision: censusDivision,
+                                organizations: organizationCount
+                            }
+                        });
+
+                        statesLayer.add(graphic);
+                    });
+
+                    // Create organization points
+                    organizationData.forEach(org => {
+                        const coords = getCoordinates(org.city, org.state);
+                        const point = new Point({
+                            longitude: coords[0],
+                            latitude: coords[1]
+                        });
+
+                        const isBorder = org.borderDesignation && org.borderDesignation !== 'N/A';
+                        const totalFunding = org.funding.local.length + org.funding.regional.length + 
+                                           org.funding.statewide.length + org.funding.national.length;
+
+                        const size = 12 + Math.min(totalFunding, 8);
+                        const color = isBorder ? [231, 76, 60] : [46, 204, 113]; // Red for border, green for non-border
+                        const outline = isBorder ? { color: [128, 0, 0], width: 3 } : { color: [255, 255, 255], width: 2 };
+
+                        const popupTemplate = new PopupTemplate({
+                            title: `${org.name}`,
+                            content: `
+                                <div style="padding: 10px;">
+                                    <p><strong>Location:</strong> ${org.city}, ${org.state}</p>
+                                    <p><strong>County:</strong> ${org.county}</p>
+                                    <p><strong>Region:</strong> ${org.region}</p>
+                                    <p><strong>Border Status:</strong> ${org.borderDesignation || 'N/A'}</p>
+                                    <p><strong>Census Division:</strong> ${org.censusDivision}</p>
+                                    <p><strong>Total Funding Sources:</strong> ${totalFunding}</p>
+                                    <div style="margin-top: 10px;">
+                                        <strong>Funding Breakdown:</strong><br>
+                                        Local: ${org.funding.local.length}<br>
+                                        Regional: ${org.funding.regional.length}<br>
+                                        Statewide: ${org.funding.statewide.length}<br>
+                                        National: ${org.funding.national.length}
+                                    </div>
+                                </div>
+                            `
+                        });
+
+                        const markerSymbol = new SimpleMarkerSymbol({
+                            color: color,
+                            size: size,
+                            outline: outline
+                        });
+
+                        const graphic = new Graphic({
+                            geometry: point,
+                            symbol: markerSymbol,
+                            popupTemplate: popupTemplate,
+                            attributes: {
+                                ...org,
+                                totalFunding: totalFunding,
+                                isBorder: isBorder
+                            }
+                        });
+
+                        organizationsLayer.add(graphic);
+                    });
+
+                    // Update statistics
+                    const borderOrgs = organizationData.filter(org => 
+                        org.borderDesignation && org.borderDesignation !== 'N/A'
+                    ).length;
+                    const nonBorderOrgs = organizationData.length - borderOrgs;
+                    const uniqueStates = new Set(organizationData.map(org => org.state)).size;
+                    const uniqueCensusDivisions = Object.keys(censusDivisionCounts).filter(div => 
+                        censusDivisionCounts[div] > 0 && div !== 'Other'
+                    ).length;
+
+                    document.getElementById("censusDivisionCount").textContent = uniqueCensusDivisions;
+                    document.getElementById("stateCount").textContent = uniqueStates;
+                    document.getElementById("borderCount").textContent = borderOrgs;
+                    document.getElementById("nonBorderCount").textContent = nonBorderOrgs;
+
+                    // Update detailed stats
+                    document.getElementById("statsSection").innerHTML = `
+                        <div><strong>${organizationData.length}</strong> Total Organizations</div>
+                        <div><strong>${uniqueCensusDivisions}</strong> Census Divisions</div>
+                        <div><strong>${uniqueStates}</strong> States/Territories</div>
+                        <div style="margin-top: 8px;">
+                            <strong>Border Region:</strong> ${borderOrgs} organizations
+                        </div>
+                        <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd;">
+                            <div style="font-size: 12px; color: #007AC2; font-weight: bold;">Division Breakdown:</div>
+                            ${Object.entries(censusDivisionCounts)
+                                .filter(([div, count]) => count > 0 && div !== 'Other')
+                                .map(([div, count]) => {
+                                    const displayName = censusDivisionMapping[div]?.displayName || div;
+                                    return `<div style="font-size: 11px; margin: 2px 0;">
+                                        <strong>${displayName}:</strong> ${count} org${count !== 1 ? 's' : ''}
+                                    </div>`;
+                                }).join('')}
+                        </div>
+                    `;
+
+                    // Initially show census divisions map
+                    organizationsLayer.visible = false;
+                    statesLayer.visible = true;
+                    
+                    // Create initial labels for census map
+                    createLabels('census');
+
+                    // Hide loading indicator
+                    document.getElementById("loadingDiv").style.display = "none";
+
+                });
+
+            } catch (error) {
+                console.error('Error loading data:', error);
+                document.getElementById("loadingDiv").innerHTML = 'Error loading data. Please check the data sources.';
+            }
+        }
+
         // Initialize the map
         require([
             "esri/Map",
@@ -1166,172 +1080,148 @@
             
             // Create map
             const map = new Map({
-                basemap: "gray-vector"
+                basemap: "streets-navigation-vector"
             });
             
-            // Create view
-            networkView = new MapView({
+            // Create map view
+            mapView = new MapView({
                 container: "viewDiv",
                 map: map,
-                zoom: 4,
-                center: [-98, 39]
+                center: [-98, 39],
+                zoom: 4
             });
             
             // Create graphics layers
-            edgeLayer = new GraphicsLayer({ title: "Funding Flows" });
-            nodeLayer = new GraphicsLayer({ title: "Organizations & Sources" });
-            labelLayer = new GraphicsLayer({ title: "Labels" });
+            statesLayer = new GraphicsLayer({ title: "Census Divisions" });
+            organizationsLayer = new GraphicsLayer({ title: "Organizations" });
+            labelsLayer = new GraphicsLayer({ title: "Labels" });
             
-            map.addMany([edgeLayer, nodeLayer, labelLayer]);
+            map.addMany([statesLayer, organizationsLayer, labelsLayer]);
+
+            mapView.when(() => {
+                loadMapData();
+            });
+
+            // Add toggle button event listeners
+            document.getElementById('censusDivBtn').addEventListener('click', () => switchMap('census'));
+            document.getElementById('organizationBtn').addEventListener('click', () => switchMap('organization'));
+
+            // Add hover effects
+            let tooltip = document.getElementById('tooltip');
             
-            networkView.when().then(() => {
-                // Load and process data
-                organizationData = loadOrganizationData();
-                const { nodes, edges } = buildNetworkData(organizationData);
-                
-                allNodes = nodes;
-                allEdges = edges;
-                
-                // Calculate statistics
-                const borderOrgs = organizationData.filter(org => 
-                    org.borderDesignation && org.borderDesignation !== 'N/A'
-                ).length;
-                const nonBorderOrgs = organizationData.length - borderOrgs;
-                
-                let totalSources = 0;
-                let nationalSources = new Set();
-                organizationData.forEach(org => {
-                    totalSources += org.funding.local.length + org.funding.regional.length + 
-                                  org.funding.statewide.length + org.funding.national.length;
-                    org.funding.national.forEach(source => nationalSources.add(source));
-                });
-                
-                // Update UI
-                document.getElementById("borderCount").textContent = borderOrgs;
-                document.getElementById("nonBorderCount").textContent = nonBorderOrgs;
-                document.getElementById("totalSources").textContent = totalSources;
-                document.getElementById("nationalSources").textContent = nationalSources.size;
-                
-                document.getElementById("statsSection").innerHTML = `
-                    <div><strong>${organizationData.length}</strong> Member Organizations</div>
-                    <div><strong>${borderOrgs}</strong> Border Region Organizations</div>
-                    <div><strong>${nonBorderOrgs}</strong> Non-Border Organizations</div>
-                    <div style="margin-top: 8px;">
-                        <strong>${totalSources}</strong> Total Funding Sources
-                    </div>
-                    <div style="margin-top: 8px; padding-top: 8px; border-top: 1px solid #ddd;">
-                        <div style="font-size: 12px; color: #007AC2; font-weight: bold;">Funding Distribution:</div>
-                        <div style="font-size: 11px; margin: 2px 0;">
-                            <strong>${nationalSources.size}</strong> unique national funders
-                        </div>
-                        <div style="font-size: 11px; margin: 2px 0;">
-                            Multi-level funding strategy across regions
-                        </div>
-                    </div>
-                `;
-                
-                updateNetworkVisualization();
-                
-                document.getElementById("loadingDiv").style.display = "none";
-                
-                // Handle click events
-                networkView.on("click", function(event) {
-                    networkView.hitTest(event).then(function(response) {
-                        const graphic = response.results[0]?.graphic;
+            mapView.on("pointer-move", function(event) {
+                mapView.hitTest(event).then(function(response) {
+                    if (response.results.length > 0) {
+                        const graphic = response.results[0].graphic;
                         if (graphic && graphic.attributes) {
-                            const attrs = graphic.attributes;
+                            tooltip.style.display = 'block';
+                            tooltip.style.left = event.x + 10 + 'px';
+                            tooltip.style.top = event.y - 30 + 'px';
                             
-                            if (attrs.nodeId && (attrs.type === 'organization' || 
-                                (attrs.type === 'category' && hasChildNodes(attrs.nodeId)))) {
-                                
-                                if (event.native.shiftKey) {
-                                    displayNodeInfo(attrs);
-                                } else {
-                                    const childCount = countDirectChildren(attrs.nodeId);
-                                    if (childCount > 0) {
-                                        window.toggleNodeExpansion(attrs.nodeId);
-                                    } else {
-                                        displayNodeInfo(attrs);
-                                    }
-                                }
-                            } else {
-                                displayNodeInfo(attrs);
+                            if (graphic.attributes.censusDivision) {
+                                // State graphic
+                                const division = censusDivisionMapping[graphic.attributes.censusDivision];
+                                tooltip.innerHTML = `
+                                    <strong>${graphic.attributes.name}</strong><br>
+                                    ${division ? division.displayName : 'Other'}<br>
+                                    ${graphic.attributes.organizations} organization${graphic.attributes.organizations !== 1 ? 's' : ''}
+                                `;
+                            } else if (graphic.attributes.name && graphic.attributes.totalFunding !== undefined) {
+                                // Organization graphic
+                                tooltip.innerHTML = `
+                                    <strong>${graphic.attributes.name}</strong><br>
+                                    ${graphic.attributes.city}, ${graphic.attributes.state}<br>
+                                    ${graphic.attributes.totalFunding} funding source${graphic.attributes.totalFunding !== 1 ? 's' : ''}
+                                `;
                             }
+                            mapView.container.style.cursor = 'pointer';
+                        }
+                    } else {
+                        tooltip.style.display = 'none';
+                        mapView.container.style.cursor = 'default';
+                    }
+                });
+            });
+
+            mapView.on("pointer-leave", function() {
+                tooltip.style.display = 'none';
+                mapView.container.style.cursor = 'default';
+            });
+
+            // Add click handler for detailed info
+            mapView.on("click", function(event) {
+                mapView.hitTest(event).then(function(response) {
+                    if (response.results.length > 0) {
+                        const graphic = response.results[0].graphic;
+                        if (graphic && graphic.attributes) {
+                            displayDetailedInfo(graphic.attributes);
+                        }
+                    }
+                });
+            });
+
+            function displayDetailedInfo(attrs) {
+                let infoHtml = "";
+                
+                if (attrs.censusDivision && attrs.name) {
+                    // State clicked
+                    const division = censusDivisionMapping[attrs.censusDivision];
+                    const orgsInState = organizationData.filter(org => org.state === attrs.state);
+                    
+                    infoHtml = `<h4>🗺️ ${attrs.name}</h4>`;
+                    infoHtml += `<div class="funding-details">`;
+                    infoHtml += `<div><strong>Census Division:</strong> ${division ? division.displayName : 'Other'}</div>`;
+                    infoHtml += `<div><strong>Organizations:</strong> ${attrs.organizations}</div>`;
+                    infoHtml += `</div>`;
+                    
+                    if (orgsInState.length > 0) {
+                        infoHtml += `<h5>Organizations in ${attrs.name}:</h5>`;
+                        orgsInState.forEach(org => {
+                            const totalFunding = org.funding.local.length + org.funding.regional.length + 
+                                               org.funding.statewide.length + org.funding.national.length;
+                            infoHtml += `<div style="margin: 8px 0; padding: 8px; background: #f9f9f9; border-radius: 4px;">`;
+                            infoHtml += `<div style="font-weight: bold;">${org.name}</div>`;
+                            infoHtml += `<div style="font-size: 12px; color: #666;">${org.city} • ${totalFunding} funding sources</div>`;
+                            infoHtml += `</div>`;
+                        });
+                    }
+                    
+                } else if (attrs.name && attrs.totalFunding !== undefined) {
+                    // Organization clicked
+                    const org = attrs;
+                    infoHtml = `<h4>🏛️ ${org.name}</h4>`;
+                    infoHtml += `<div class="funding-details">`;
+                    infoHtml += `<div><strong>Location:</strong> ${org.city}, ${org.state}</div>`;
+                    infoHtml += `<div><strong>County:</strong> ${org.county}</div>`;
+                    infoHtml += `<div><strong>Region:</strong> ${org.region}</div>`;
+                    infoHtml += `<div><strong>Border Status:</strong> ${org.borderDesignation || 'N/A'}</div>`;
+                    infoHtml += `<div><strong>Census Division:</strong> ${org.censusDivision}</div>`;
+                    infoHtml += `</div>`;
+                    
+                    // Add funding breakdown
+                    infoHtml += `<h5>💰 Funding Sources (${org.totalFunding} total):</h5>`;
+                    
+                    const fundingCategories = [
+                        { name: 'Local', sources: org.funding.local, color: '#f39c12' },
+                        { name: 'Regional', sources: org.funding.regional, color: '#27AE60' },
+                        { name: 'Statewide', sources: org.funding.statewide, color: '#3498DB' },
+                        { name: 'National', sources: org.funding.national, color: '#9B59B6' }
+                    ];
+                    
+                    fundingCategories.forEach(category => {
+                        if (category.sources.length > 0) {
+                            infoHtml += `<div style="margin: 8px 0; padding: 8px; background: #f9f9f9; border-left: 4px solid ${category.color}; border-radius: 4px;">`;
+                            infoHtml += `<div style="font-weight: bold; margin-bottom: 4px;">${category.name} (${category.sources.length})</div>`;
+                            category.sources.forEach(source => {
+                                infoHtml += `<div style="font-size: 12px; margin: 2px 0; padding-left: 8px;">• ${source}</div>`;
+                            });
+                            infoHtml += `</div>`;
                         }
                     });
-                });
-                
-                // Function to display node information
-                function displayNodeInfo(attrs) {
-                    let infoHtml = "";
-                    
-                    if (attrs.type === "organization") {
-                        const org = attrs.data;
-                        infoHtml = `<h4>🏛️ ${attrs.name}</h4>`;
-                        infoHtml += `<div class="funding-details">`;
-                        infoHtml += `<div><strong>Location:</strong> ${org.city}, ${org.state}</div>`;
-                        infoHtml += `<div><strong>County:</strong> ${org.county}</div>`;
-                        infoHtml += `<div><strong>Region:</strong> ${org.region}</div>`;
-                        infoHtml += `<div><strong>Border Status:</strong> ${org.borderDesignation || 'N/A'}</div>`;
-                        if (org.programSites) {
-                            infoHtml += `<div><strong>Program Sites:</strong> ${org.programSites}</div>`;
-                        }
-                        infoHtml += `</div>`;
-                        
-                        // Add funding breakdown
-                        infoHtml += `<h5>💰 Funding Sources Breakdown:</h5>`;
-                        
-                        const fundingCategories = [
-                            { name: 'Local', sources: org.funding.local, color: '#f39c12' },
-                            { name: 'Regional', sources: org.funding.regional, color: '#27AE60' },
-                            { name: 'Statewide', sources: org.funding.statewide, color: '#3498DB' },
-                            { name: 'National', sources: org.funding.national, color: '#9B59B6' }
-                        ];
-                        
-                        fundingCategories.forEach(category => {
-                            if (category.sources.length > 0) {
-                                infoHtml += `<div class="branch-section" style="border-left-color: ${category.color};">`;
-                                infoHtml += `<div class="branch-title">${category.name} Funding (${category.sources.length})</div>`;
-                                infoHtml += `<div class="tree-structure">`;
-                                category.sources.forEach(source => {
-                                    infoHtml += `<div class="tree-node">${source}</div>`;
-                                });
-                                infoHtml += `</div></div>`;
-                            }
-                        });
-                        
-                    } else if (attrs.type === "category") {
-                        infoHtml = `<h4>📊 ${attrs.name} Funding</h4>`;
-                        infoHtml += `<div class="funding-flow">`;
-                        infoHtml += `<div>${attrs.details}</div>`;
-                        infoHtml += `<div style="margin-top: 5px;">Click to expand/collapse funding sources</div>`;
-                        infoHtml += `</div>`;
-                        
-                    } else if (attrs.type === "funding_source") {
-                        infoHtml = `<h4>💵 ${attrs.name}</h4>`;
-                        infoHtml += `<div class="funding-flow">`;
-                        infoHtml += `<div><strong>Level:</strong> ${attrs.fundingLevel.charAt(0).toUpperCase() + attrs.fundingLevel.slice(1)}</div>`;
-                        infoHtml += `<div><strong>Supporting:</strong> ${attrs.parentOrg}</div>`;
-                        infoHtml += `</div>`;
-                    }
-                    
-                    document.getElementById("nodeInfo").innerHTML = infoHtml || "<p>Click on organizations to view funding networks</p>";
-                    
-                    // Add instruction about clicking nodes
-                    const currentNodeId = attrs.nodeId || attrs.id;
-                    if (currentNodeId && (attrs.type === 'organization' || 
-                        (attrs.type === 'category' && hasChildNodes(currentNodeId)))) {
-                        const childCount = countDirectChildren(currentNodeId);
-                        if (childCount > 0) {
-                            const isCollapsed = collapsedNodes.has(currentNodeId);
-                            const instruction = `<p style="font-size: 12px; color: #666; margin-top: 10px;">
-                                <em>Click node to ${isCollapsed ? 'expand' : 'collapse'} • Shift+Click for info only</em>
-                            </p>`;
-                            document.getElementById("nodeInfo").innerHTML += instruction;
-                        }
-                    }
                 }
-            });
+                
+                document.getElementById("nodeInfo").innerHTML = infoHtml || "<p>Click on states or organizations to view details</p>";
+            }
         });
     </script>
 </body>
