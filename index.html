@@ -794,16 +794,25 @@
             return count;
         }
         
-        // Build network data structure with funding awareness
+        // Build network data structure with funding awareness and anti-overlap positioning
         function buildNetworkData(organizations) {
             const nodes = {};
             const edges = [];
             let nodeIdCounter = 0;
             
+            // First, count organizations per city to handle overlaps
+            const cityCount = countOrganizationsPerCity(organizations);
+            
             // Process each organization
             organizations.forEach((org, orgIndex) => {
                 const orgId = `org_${orgIndex}`;
-                const coordinates = getCoordinates(org.city, org.state);
+                
+                // Get coordinates with anti-overlap positioning
+                const cityKey = `${org.city}, ${org.state}`;
+                const organizationsInThisCity = cityCount[cityKey];
+                const organizationIndexInCity = getOrganizationIndexInCity(organizations, orgIndex);
+                const coordinates = getCoordinates(org.city, org.state, organizationIndexInCity, organizationsInThisCity);
+                
                 const isBorder = org.borderDesignation && org.borderDesignation !== 'N/A';
                 
                 // Create organization node
@@ -818,7 +827,9 @@
                     connections: 0,
                     isBorder: isBorder,
                     totalFundingSources: org.funding.local.length + org.funding.regional.length + 
-                                       org.funding.statewide.length + org.funding.national.length
+                                       org.funding.statewide.length + org.funding.national.length,
+                    cityKey: cityKey,
+                    organizationsInCity: organizationsInThisCity
                 };
                 
                 // Process funding categories
@@ -833,10 +844,11 @@
                     if (category.sources.length > 0) {
                         const catId = `${orgId}_cat_${catIndex}`;
                         
-                        // Create category node
+                        // Create category node positioned around organization with larger radius to avoid overlap
+                        const categoryRadius = organizationsInThisCity > 1 ? 0.7 : 0.5; // Larger radius for cities with multiple orgs
                         const catCoords = [
-                            coordinates[0] + (Math.cos((catIndex * 90) * Math.PI / 180) * 0.5),
-                            coordinates[1] + (Math.sin((catIndex * 90) * Math.PI / 180) * 0.5)
+                            coordinates[0] + (Math.cos((catIndex * 90) * Math.PI / 180) * categoryRadius),
+                            coordinates[1] + (Math.sin((catIndex * 90) * Math.PI / 180) * categoryRadius)
                         ];
                         
                         nodes[catId] = {
@@ -848,7 +860,8 @@
                             coords: catCoords,
                             connections: 0,
                             fundingLevel: category.name.toLowerCase(),
-                            sourceCount: category.sources.length
+                            sourceCount: category.sources.length,
+                            parentOrgCity: cityKey
                         };
                         
                         // Create edge from organization to category
@@ -864,12 +877,12 @@
                         category.sources.forEach((source, sourceIndex) => {
                             const sourceId = `${catId}_source_${sourceIndex}`;
                             
-                            // Create source node positioned around category
+                            // Create source node positioned around category with adaptive radius
                             const angle = (sourceIndex / category.sources.length) * 2 * Math.PI;
-                            const radius = 0.3;
+                            const sourceRadius = organizationsInThisCity > 1 ? 0.4 : 0.3; // Adaptive radius
                             const sourceCoords = [
-                                catCoords[0] + (Math.cos(angle) * radius),
-                                catCoords[1] + (Math.sin(angle) * radius)
+                                catCoords[0] + (Math.cos(angle) * sourceRadius),
+                                catCoords[1] + (Math.sin(angle) * sourceRadius)
                             ];
                             
                             nodes[sourceId] = {
@@ -881,7 +894,8 @@
                                 coords: sourceCoords,
                                 connections: 0,
                                 fundingLevel: category.name.toLowerCase(),
-                                parentOrg: org.name
+                                parentOrg: org.name,
+                                parentOrgCity: cityKey
                             };
                             
                             // Create edge from category to source
@@ -1036,13 +1050,19 @@
                         
                         nodeGraphics.push(graphic);
                         
-                        // Add labels for important nodes
+                        // Add labels for important nodes with city overlap indicators
                         if (node.type === "organization" || 
                             (node.type === "category" && node.connections > 0)) {
                             let labelText = node.name;
                             if (node.type === "organization") {
                                 labelText = node.name.length > 25 ? 
                                     node.name.substring(0, 22) + '...' : node.name;
+                                
+                                // Add city indicator for overlapping organizations
+                                if (node.organizationsInCity > 1) {
+                                    const orgNumber = organizationData.findIndex(org => org.name === node.name) + 1;
+                                    labelText += ` (#${orgNumber})`;
+                                }
                             }
                             
                             if (collapsedChildCount > 0) {
@@ -1098,7 +1118,7 @@
             return [...rgb, alpha];
         }
         
-        // Load and process organization data
+        // Load and process organization data with overlap detection
         function loadOrganizationData() {
             const processedData = orgData.data.map(org => ({
                 name: org['Member Organization'],
@@ -1109,7 +1129,6 @@
                 borderDesignation: org['Border Designation'],
                 censusDivision: org['Census Division'],
                 programSites: org['# of Program Sites'],
-                coordinates: getCoordinates(org.City, org.State),
                 funding: {
                     local: parseFundingSources(org['Local Funding Sources']),
                     regional: parseFundingSources(org['Regional Funding Sources']),
@@ -1117,6 +1136,23 @@
                     national: parseFundingSources(org['National Funding Sources'])
                 }
             }));
+            
+            // Debug: Log cities with multiple organizations
+            const cityGroups = {};
+            processedData.forEach((org, index) => {
+                const key = `${org.city}, ${org.state}`;
+                if (!cityGroups[key]) {
+                    cityGroups[key] = [];
+                }
+                cityGroups[key].push({ name: org.name, index });
+            });
+            
+            // Log cities with overlaps
+            Object.entries(cityGroups).forEach(([city, orgs]) => {
+                if (orgs.length > 1) {
+                    console.log(`🏛️ ${city} has ${orgs.length} organizations:`, orgs.map(o => o.name));
+                }
+            });
             
             return processedData;
         }
